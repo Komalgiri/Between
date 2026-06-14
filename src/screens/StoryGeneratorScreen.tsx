@@ -5,17 +5,20 @@ import {
   View,
   TouchableOpacity,
   Dimensions,
-  Image as RNImage,
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   Animated,
+  Alert,
+  Share,
 } from 'react-native';
 import { theme } from '../theme/theme';
 import { ArrowLeft, BookOpen, Sparkles, Edit3, Share2, CheckCircle } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
+import { generateStoryChapter } from '../services/geminiService';
+import { isGeminiConfigured } from '../config/geminiEnv';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,68 +26,81 @@ const PROMPT_SUGGESTIONS = ['Our first date', 'The weekend getaway', 'When we me
 
 export const StoryGeneratorScreen = () => {
   const navigation = useNavigation();
-  const { addVaultItem } = useAppContext();
+  const { createMemory, userName, partnerName } = useAppContext();
   const [prompt, setPrompt] = useState('');
   const [selectedSuggestion, setSelectedSuggestion] = useState('');
-  
-  // States: 'input' | 'generating' | 'result'
+  const [generatedStory, setGeneratedStory] = useState('');
+
   const [screenState, setScreenState] = useState<'input' | 'generating' | 'result'>('input');
-  
-  // Animation for generation
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Typewriter effect state
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  // New Feature States
   const [showVaultToast, setShowVaultToast] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const handleSaveToVault = () => {
-    addVaultItem({
-      id: Math.random().toString(),
-      type: 'story',
-      title: `Chapter: ${prompt || selectedSuggestion || 'A New Memory'}`,
-      date: 'Just now',
-    });
-    setShowVaultToast(true);
-    setTimeout(() => {
-      setShowVaultToast(false);
-      navigation.goBack(); // Optional: go back after saving or stay
-    }, 2000);
+  const handleSaveToVault = async () => {
+    const topic = prompt.trim() || selectedSuggestion || 'A New Memory';
+    try {
+      await createMemory({
+        note: generatedStory || displayedText,
+        type: 'story',
+        title: `Chapter: ${topic}`,
+      });
+      setShowVaultToast(true);
+      setTimeout(() => {
+        setShowVaultToast(false);
+        navigation.goBack();
+      }, 2000);
+    } catch {
+      Alert.alert('Could not save', 'Check your connection.');
+    }
   };
 
-  const handleExportInsta = () => {
-    setIsExporting(true);
-    setTimeout(() => setIsExporting(false), 2000);
-  };
+  const handleExportInsta = async () => {
+    const story = generatedStory || displayedText;
+    if (!story.trim()) return;
 
-  const mockGeneratedStory = `Chapter I\n\nThe light in the coffee shop was softer than usual that day, casting a warm golden hue across the small table where it all began. You were nervous, tapping your fingers against the porcelain cup, but the moment our eyes met, the noise of the world seemed to fade into a gentle hum. \n\nIt wasn't just a first date; it was the prologue to a sanctuary we would build together. Every laugh shared over that spilled latte was a foundation stone, every lingering glance a promise of the chapters yet to be written.`;
+    const topic = prompt.trim() || selectedSuggestion || 'Our story';
+    const message = `Between — ${topic}\n\n${story}\n\n— ${userName} & ${partnerName}`;
+
+    try {
+      setIsExporting(true);
+      await Share.share(
+        { message, title: `Between: ${topic}` },
+        { dialogTitle: 'Share your story' }
+      );
+    } catch {
+      Alert.alert('Could not share', 'Sharing was cancelled or is unavailable on this device.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (screenState === 'generating') {
-      Animated.loop(
+      pulseLoop.current = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
         ])
-      ).start();
-
-      // Simulate network request then start typing
-      setTimeout(() => {
-        setScreenState('result');
-        startTypewriter();
-      }, 3000);
+      );
+      pulseLoop.current.start();
+    } else {
+      pulseLoop.current?.stop();
+      pulseAnim.setValue(1);
     }
-  }, [screenState]);
+  }, [screenState, pulseAnim]);
 
-  const startTypewriter = () => {
+  const startTypewriter = (fullText: string) => {
     setIsTyping(true);
     let i = 0;
     setDisplayedText('');
-    
+
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 800,
@@ -92,18 +108,41 @@ export const StoryGeneratorScreen = () => {
     }).start();
 
     const intervalId = setInterval(() => {
-      setDisplayedText(mockGeneratedStory.substring(0, i + 1));
+      setDisplayedText(fullText.substring(0, i + 1));
       i++;
-      if (i >= mockGeneratedStory.length) {
+      if (i >= fullText.length) {
         clearInterval(intervalId);
         setIsTyping(false);
       }
-    }, 30);
+    }, 24);
   };
 
-  const handleGenerate = () => {
-    if (!prompt && !selectedSuggestion) return;
+  const handleGenerate = async () => {
+    const topic = prompt.trim() || selectedSuggestion;
+    if (!topic) return;
+
+    if (!isGeminiConfigured()) {
+      Alert.alert(
+        'Gemini API key needed',
+        'Add EXPO_PUBLIC_GEMINI_API_KEY to .env (free at aistudio.google.com) and restart Expo with -c.'
+      );
+      return;
+    }
+
     setScreenState('generating');
+    setGeneratedStory('');
+    setDisplayedText('');
+
+    try {
+      const text = await generateStoryChapter({ topic, userName, partnerName });
+      setGeneratedStory(text);
+      setScreenState('result');
+      startTypewriter(text);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Could not generate chapter.';
+      Alert.alert('Generation failed', message);
+      setScreenState('input');
+    }
   };
 
   return (

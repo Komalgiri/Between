@@ -8,18 +8,17 @@ import { MoodSyncScreen } from '../screens/MoodSyncScreen';
 import { MemoryTimelineScreen } from '../screens/MemoryTimelineScreen';
 import { AILetterScreen } from '../screens/AILetterScreen';
 import { theme } from '../theme/theme';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from './RootNavigator';
 import * as ImagePicker from 'expo-image-picker';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 const Tab = createBottomTabNavigator();
 
-// Empty component for the "Add" button which might open a modal instead of a screen
 const EmptyScreen = () => null;
 
 export const TabNavigator = () => {
-  const { setSharedMomentUri } = useAppContext();
+  const { shareMoment } = useAppContext();
+  const { firebaseEnabled } = useAuth();
 
   const openCamera = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
@@ -34,7 +33,17 @@ export const TabNavigator = () => {
       quality: 0.8,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setSharedMomentUri(result.assets[0].uri);
+      try {
+        await shareMoment(result.assets[0].uri);
+        Alert.alert(
+          'Moment shared',
+          firebaseEnabled
+            ? 'Your partner will see it on Home.'
+            : 'Saved locally for this session.'
+        );
+      } catch {
+        Alert.alert('Could not share', 'Check your connection and Firebase Storage setup.');
+      }
     }
   };
 

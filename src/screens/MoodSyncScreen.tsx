@@ -1,37 +1,58 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   Dimensions,
-  Image as RNImage,
   ScrollView,
   TextInput,
 } from 'react-native';
 import { theme } from '../theme/theme';
-import { Settings, Home, Heart, PlusCircle, Image as ImageIcon, MessageCircle, Cloud, BookOpen, Sparkles, Moon, ChevronRight } from 'lucide-react-native';
+import { Settings, Heart, Cloud, BookOpen, Sparkles, Moon, ChevronRight } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppContext, MoodId } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { MOOD_LABELS } from '../types/mood';
+import { formatRelativeTime } from '../utils/time';
+import { moodBarHeight } from '../services/moodHistoryService';
 
 const { width } = Dimensions.get('window');
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const MOOD_OPTIONS: { id: MoodId; label: string; Icon: typeof Cloud }[] = [
   { id: 'serene', label: 'Serene', Icon: Cloud },
   { id: 'connected', label: 'Connected', Icon: Heart },
   { id: 'pensive', label: 'Pensive', Icon: BookOpen },
+  { id: 'restful', label: 'Restful', Icon: Moon },
 ];
 
-const PARTNER_MOOD_LABELS: Record<MoodId, string> = {
-  serene: 'Serene',
-  connected: 'Connected',
-  pensive: 'Pensive',
-  restful: 'Restful',
-};
-
 export const MoodSyncScreen = () => {
-  const navigation = useNavigation();
-  const { userMood, setUserMood, partnerMood, dailyStatus, setDailyStatus, partnerName } = useAppContext();
+  const navigation = useNavigation<Nav>();
+  const { user } = useAuth();
+  const {
+    userMood,
+    setUserMood,
+    partnerMood,
+    dailyStatus,
+    setDailyStatus,
+    partnerName,
+    partnerDailyStatus,
+    partnerPresenceUpdatedAt,
+    moodHistory,
+    userName,
+  } = useAppContext();
+
+  const myMoodArc = useMemo(() => {
+    if (!user?.uid) return [];
+    return moodHistory
+      .filter((e) => e.userId === user.uid)
+      .slice(0, 7)
+      .reverse();
+  }, [moodHistory, user?.uid]);
 
   return (
     <View style={styles.container}>
@@ -42,13 +63,12 @@ export const MoodSyncScreen = () => {
       {/* TopAppBar */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.avatarContainer} onPress={() => navigation.goBack()}>
-          <RNImage 
-            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAmnkAJL1SwhDnvZhYP-mXaVbw36tF2OshrT1oAcJm3fhq5NLcwv16sUqjNEWmE5Uh9tk15FTfqSD0gJUP4OcOk5iust_9fGyvNg0su1bftX4QFTpg4_KERgvtZ9qcPYpS-4AfdSTrdI4tTwjvEsL1GsEptTwCCUIAcuam8btm-CoUeFRO8NV_rClL1Ltt-ODW5ewi-M_08HT6-ZKGtCCoMHMT-ulbLyjJroMO8NldHIDHKsRL8aRhQdon_yij1oRty_DvuiwaP1A' }}
-            style={styles.avatar}
-          />
+          <View style={styles.avatarFallback}>
+            <Text style={styles.avatarText}>{userName.charAt(0).toUpperCase()}</Text>
+          </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Between</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
           <Settings color={theme.colors.primary} size={24} />
         </TouchableOpacity>
       </View>
@@ -111,9 +131,11 @@ export const MoodSyncScreen = () => {
               <Heart color={theme.colors.primary} size={32} fill={theme.colors.primary} />
             </View>
             <Text style={styles.comparisonMood}>
-              {MOOD_OPTIONS.find((m) => m.id === userMood)?.label ?? 'Connected'}
+              {MOOD_LABELS[userMood] ?? 'Connected'}
             </Text>
-            <Text style={styles.comparisonTime}>Live on widget</Text>
+            <Text style={styles.comparisonTime} numberOfLines={2}>
+              {dailyStatus || 'Live on widget'}
+            </Text>
           </View>
 
           {/* PARTNER */}
@@ -123,8 +145,10 @@ export const MoodSyncScreen = () => {
             <View style={styles.comparisonIconBox}>
               <Moon color="#c5c5d8" size={32} fill="#c5c5d8" />
             </View>
-            <Text style={styles.comparisonMood}>{PARTNER_MOOD_LABELS[partnerMood]}</Text>
-            <Text style={styles.comparisonTime}>Updated 1h ago</Text>
+            <Text style={styles.comparisonMood}>{MOOD_LABELS[partnerMood]}</Text>
+            <Text style={styles.comparisonTime} numberOfLines={2}>
+              {partnerDailyStatus || formatRelativeTime(partnerPresenceUpdatedAt)}
+            </Text>
           </View>
         </View>
 
@@ -150,14 +174,29 @@ export const MoodSyncScreen = () => {
           </View>
 
           <View style={styles.historyGraphCard}>
-            {/* Mock Graph Bars */}
-            <View style={[styles.graphBar, { height: '40%', backgroundColor: 'rgba(255, 217, 224, 0.4)' }]} />
-            <View style={[styles.graphBar, { height: '60%', backgroundColor: 'rgba(255, 217, 224, 0.6)' }]} />
-            <View style={[styles.graphBar, { height: '30%', backgroundColor: 'rgba(197, 197, 216, 0.5)' }]} />
-            <View style={[styles.graphBar, { height: '80%', backgroundColor: 'rgba(255, 217, 224, 0.7)', borderTopWidth: 2, borderTopColor: 'rgba(255,255,255,0.4)' }]} />
-            <View style={[styles.graphBar, { height: '45%', backgroundColor: 'rgba(255, 217, 224, 0.4)' }]} />
-            <View style={[styles.graphBar, { height: '55%', backgroundColor: 'rgba(197, 197, 216, 0.6)' }]} />
-            <View style={[styles.graphBar, { height: '95%', backgroundColor: 'rgba(255, 217, 224, 0.8)' }]} />
+            {myMoodArc.length === 0 ? (
+              <Text style={styles.historyEmpty}>Change your mood to start your arc.</Text>
+            ) : (
+              myMoodArc.map((entry, idx) => {
+                const h = moodBarHeight[entry.mood] ?? 0.5;
+                const isLatest = idx === myMoodArc.length - 1;
+                return (
+                  <View
+                    key={entry.id}
+                    style={[
+                      styles.graphBar,
+                      {
+                        height: `${Math.round(h * 100)}%`,
+                        backgroundColor: isLatest
+                          ? 'rgba(255, 217, 224, 0.8)'
+                          : 'rgba(255, 217, 224, 0.4)',
+                      },
+                      isLatest && styles.graphBarLatest,
+                    ]}
+                  />
+                );
+              })
+            )}
           </View>
         </View>
 
@@ -207,9 +246,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
-  avatar: {
+  avatarFallback: {
     width: '100%',
     height: '100%',
+    backgroundColor: 'rgba(255, 217, 224, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: theme.colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 28,
@@ -414,6 +461,17 @@ const styles = StyleSheet.create({
     flex: 1,
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
+  },
+  graphBarLatest: {
+    borderTopWidth: 2,
+    borderTopColor: 'rgba(255,255,255,0.4)',
+  },
+  historyEmpty: {
+    flex: 1,
+    textAlign: 'center',
+    color: theme.colors.secondary,
+    fontSize: 13,
+    alignSelf: 'center',
   },
   bottomNavContainer: {
     position: 'absolute',

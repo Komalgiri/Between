@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,25 +8,53 @@ import {
   Image as RNImage,
   ScrollView,
   Platform,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { theme } from '../theme/theme';
-import { ArrowLeft, Lock, Unlock, Image as ImageIcon, FileText, Heart, Plus, ShieldCheck, Search, Filter, BookOpen } from 'lucide-react-native';
+import { ArrowLeft, Lock, Unlock, FileText, Plus, ShieldCheck, Search, BookOpen } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppContext } from '../context/AppContext';
+import { authenticateVault } from '../lib/biometric';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export const PrivateVaultScreen = () => {
-  const navigation = useNavigation();
-  const { vaultItems } = useAppContext();
+  const navigation = useNavigation<Nav>();
+  const { memories, biometricUnlockEnabled } = useAppContext();
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Fake Biometric / PIN entry simulation
+  const filteredMemories = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return memories;
+    return memories.filter(
+      (m) =>
+        m.title.toLowerCase().includes(q) ||
+        (m.note?.toLowerCase().includes(q) ?? false) ||
+        (m.location?.toLowerCase().includes(q) ?? false)
+    );
+  }, [memories, searchQuery]);
+
+  const tryUnlock = async () => {
+    if (!biometricUnlockEnabled) {
+      setIsUnlocked(true);
+      return;
+    }
+    const ok = await authenticateVault();
+    if (ok) setIsUnlocked(true);
+    else Alert.alert('Could not unlock', 'Biometric authentication failed or was cancelled.');
+  };
+
   if (!isUnlocked) {
     return (
       <View style={styles.lockContainer}>
         <View style={styles.lockGlow} />
-        
+
         <TouchableOpacity style={styles.backButtonAbsolute} onPress={() => navigation.goBack()}>
           <ArrowLeft color={theme.colors.onSurfaceVariant} size={28} />
         </TouchableOpacity>
@@ -36,23 +64,17 @@ export const PrivateVaultScreen = () => {
             <Lock color={theme.colors.primary} size={40} />
           </View>
           <Text style={styles.lockTitle}>Private Vault</Text>
-          <Text style={styles.lockSubtitle}>Protected by biometric encryption.</Text>
+          <Text style={styles.lockSubtitle}>
+            {biometricUnlockEnabled
+              ? 'Use Face ID or fingerprint to enter.'
+              : 'Biometric unlock is off in Settings.'}
+          </Text>
 
-          {/* Fake Pin dots */}
-          <View style={styles.pinDots}>
-            <View style={[styles.dot, styles.dotFilled]} />
-            <View style={[styles.dot, styles.dotFilled]} />
-            <View style={[styles.dot, styles.dotFilled]} />
-            <View style={styles.dot} />
-          </View>
-
-          {/* Unlock Button */}
-          <TouchableOpacity 
-            style={styles.unlockButton}
-            onPress={() => setIsUnlocked(true)}
-          >
+          <TouchableOpacity style={styles.unlockButton} onPress={tryUnlock}>
             <ShieldCheck color="#c8c8b0" size={20} />
-            <Text style={styles.unlockButtonText}>Tap to Unlock</Text>
+            <Text style={styles.unlockButtonText}>
+              {biometricUnlockEnabled ? 'Unlock with biometrics' : 'Enter vault'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -73,25 +95,34 @@ export const PrivateVaultScreen = () => {
           <Unlock color={theme.colors.secondary} size={18} />
           <Text style={styles.headerTitle}>Vault</Text>
         </View>
-        <TouchableOpacity>
-          <Filter color={theme.colors.primary} size={24} />
-        </TouchableOpacity>
+        <View style={{ width: 24 }} />
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBox}>
           <Search color="rgba(197, 197, 216, 0.4)" size={20} />
-          <Text style={styles.searchPlaceholder}>Search hidden memories...</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search hidden memories..."
+            placeholderTextColor="rgba(197, 197, 216, 0.4)"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
       </View>
 
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {filteredMemories.length === 0 ? (
+          <View style={styles.emptyVault}>
+            <Text style={styles.emptyTitle}>Vault is empty</Text>
+            <Text style={styles.emptySubtitle}>Tap + to add your first hidden memory.</Text>
+          </View>
+        ) : (
         <View style={styles.gridContainer}>
-          {vaultItems.map((item) => (
+          {filteredMemories.map((item) => (
             <TouchableOpacity key={item.id} style={styles.gridItem}>
               {item.type === 'image' ? (
                 <RNImage source={{ uri: item.uri }} style={styles.itemImage} />
@@ -115,10 +146,14 @@ export const PrivateVaultScreen = () => {
             </TouchableOpacity>
           ))}
         </View>
+        )}
       </ScrollView>
 
       {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab}>
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('CreateMemory')}
+      >
         <Plus color={theme.colors.background} size={32} />
       </TouchableOpacity>
     </View>
@@ -256,13 +291,31 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 12,
   },
-  searchPlaceholder: {
-    color: 'rgba(197, 197, 216, 0.4)',
+  searchInput: {
+    flex: 1,
+    color: theme.colors.primary,
     fontSize: 14,
+    padding: 0,
   },
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 150,
+  },
+  emptyVault: {
+    paddingTop: 80,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  emptyTitle: {
+    color: theme.colors.primary,
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  emptySubtitle: {
+    color: theme.colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   gridContainer: {
     flexDirection: 'row',

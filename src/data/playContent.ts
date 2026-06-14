@@ -54,3 +54,11 @@ export function getDailyQuestionForDate(date = new Date()): DailyQuestion {
 export function pickRandomPrompt<T extends { id: string }>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
+
+/** Splits "Would you rather X or Y?" into two option labels. */
+export function parseWyrOptions(text: string): [string, string] {
+  const body = text.replace(/^Would you rather\s+/i, '').replace(/\?$/, '').trim();
+  const splitAt = body.lastIndexOf(' or ');
+  if (splitAt === -1) return [body, 'Option B'];
+  return [body.slice(0, splitAt).trim(), body.slice(splitAt + 4).trim()];
+}

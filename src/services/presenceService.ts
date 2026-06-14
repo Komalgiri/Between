@@ -9,6 +9,7 @@ import {
 import { getFirebaseDb } from '../lib/firebase';
 import { MoodId } from '../types/mood';
 import { PresenceDoc } from '../types/firebase';
+import { Coordinates } from '../utils/distance';
 
 const presenceDoc = (relationshipId: string, userId: string) =>
   doc(getFirebaseDb(), 'relationships', relationshipId, 'presence', userId);
@@ -25,6 +26,22 @@ export const updatePresence = async (
       dailyStatus: data.dailyStatus,
       displayName: data.displayName,
       updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+};
+
+export const updatePresenceLocation = async (
+  relationshipId: string,
+  userId: string,
+  coords: Coordinates
+): Promise<void> => {
+  await setDoc(
+    presenceDoc(relationshipId, userId),
+    {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      locationUpdatedAt: serverTimestamp(),
     },
     { merge: true }
   );

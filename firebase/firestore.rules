@@ -28,6 +28,52 @@ service cloud.firestore {
         allow read: if isMember(relationshipId);
         allow write: if isMember(relationshipId) && request.auth.uid == userId;
       }
+
+      match /moments/{momentId} {
+        allow read: if isMember(relationshipId);
+        allow create: if isMember(relationshipId)
+          && request.resource.data.userId == request.auth.uid;
+      }
+
+      match /letters/{letterId} {
+        allow read: if isMember(relationshipId);
+        allow create: if isMember(relationshipId)
+          && request.resource.data.fromUserId == request.auth.uid;
+      }
+
+      match /memories/{memoryId} {
+        allow read: if isMember(relationshipId);
+        allow create: if isMember(relationshipId)
+          && request.resource.data.userId == request.auth.uid;
+      }
+
+      match /play/{sessionId} {
+        allow read: if isMember(relationshipId);
+        allow create, update: if isMember(relationshipId);
+      }
+
+      match /reminders/{reminderId} {
+        allow read: if isMember(relationshipId);
+        allow create: if isMember(relationshipId)
+          && request.resource.data.createdBy == request.auth.uid;
+      }
+
+      match /stories/{storyId} {
+        allow read: if isMember(relationshipId);
+        allow create: if isMember(relationshipId)
+          && request.resource.data.fromUserId == request.auth.uid;
+      }
+
+      match /liveCanvas/{canvasId} {
+        allow read: if isMember(relationshipId);
+        allow create, update: if isMember(relationshipId);
+      }
+
+      match /moodHistory/{entryId} {
+        allow read: if isMember(relationshipId);
+        allow create: if isMember(relationshipId)
+          && request.resource.data.userId == request.auth.uid;
+      }
     }
   }
 }

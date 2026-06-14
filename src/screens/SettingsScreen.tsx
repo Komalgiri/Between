@@ -6,18 +6,73 @@ import {
   TouchableOpacity,
   Switch,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { theme } from '../theme/theme';
-import { ArrowLeft, Bell, Heart, Shield, LogOut } from 'lucide-react-native';
+import { ArrowLeft, Bell, Heart, Shield, LogOut, Mail, KeyRound } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { sendPasswordReset } from '../services/authService';
+import { unlinkPartner } from '../services/relationshipService';
+import { appMeta } from '../config/firebaseEnv';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export const SettingsScreen = () => {
-  const navigation = useNavigation();
-  const { cuteNotificationsEnabled, setCuteNotificationsEnabled } = useAppContext();
-  const { firebaseEnabled, signOut } = useAuth();
-  const [biometricLogin, setBiometricLogin] = useState(true);
+  const navigation = useNavigation<Nav>();
+  const { cuteNotificationsEnabled, setCuteNotificationsEnabled, biometricUnlockEnabled, setBiometricUnlockEnabled, relationshipId } = useAppContext();
+  const { firebaseEnabled, signOut, user, refreshProfile } = useAuth();
+  const [busy, setBusy] = useState(false);
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) {
+      Alert.alert('No email', 'Sign in with email to reset your password.');
+      return;
+    }
+    try {
+      await sendPasswordReset(user.email);
+      Alert.alert('Check your inbox', `We sent a reset link to ${user.email}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Could not send reset email.';
+      Alert.alert('Reset failed', message);
+    }
+  };
+
+  const handleUnlink = () => {
+    if (!firebaseEnabled || !user || !relationshipId) {
+      Alert.alert('Offline mode', 'Sign in and pair with Firebase to unlink.');
+      return;
+    }
+
+    Alert.alert(
+      'Unlink partner?',
+      'You will leave this sanctuary. Your partner keeps their account but you will need to set up again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unlink',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            try {
+              await unlinkPartner(user.uid, relationshipId);
+              await refreshProfile();
+              navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
+            } catch (e: unknown) {
+              const message = e instanceof Error ? e.message : 'Could not unlink.';
+              Alert.alert('Failed', message);
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -30,17 +85,17 @@ export const SettingsScreen = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Notifications Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Bell color={theme.colors.secondary} size={18} />
             <Text style={styles.sectionTitle}>NOTIFICATIONS</Text>
           </View>
-          
           <View style={styles.settingRow}>
             <View style={styles.settingTextContainer}>
               <Text style={styles.settingLabel}>Cute Notifications</Text>
-              <Text style={styles.settingDescription}>Receive random sweet messages and memory reminders throughout the day.</Text>
+              <Text style={styles.settingDescription}>
+                Saved locally for now. Push alerts coming in a future update.
+              </Text>
             </View>
             <Switch
               value={cuteNotificationsEnabled}
@@ -51,37 +106,50 @@ export const SettingsScreen = () => {
           </View>
         </View>
 
-        {/* Privacy Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Shield color={theme.colors.secondary} size={18} />
             <Text style={styles.sectionTitle}>PRIVACY & SECURITY</Text>
           </View>
-          
           <View style={styles.settingRow}>
             <View style={styles.settingTextContainer}>
               <Text style={styles.settingLabel}>Biometric Unlock</Text>
-              <Text style={styles.settingDescription}>Use FaceID or Fingerprint to unlock the Private Vault.</Text>
+              <Text style={styles.settingDescription}>
+                Require Face ID or fingerprint to open the Private Vault.
+              </Text>
             </View>
             <Switch
-              value={biometricLogin}
-              onValueChange={setBiometricLogin}
+              value={biometricUnlockEnabled}
+              onValueChange={setBiometricUnlockEnabled}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: theme.colors.tertiary }}
               thumbColor={theme.colors.primary}
             />
           </View>
         </View>
 
-        {/* Account Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Heart color={theme.colors.secondary} size={18} />
             <Text style={styles.sectionTitle}>ACCOUNT</Text>
           </View>
-          
-          <TouchableOpacity style={styles.buttonRow}>
-            <Text style={styles.buttonText}>Unlink Partner</Text>
+
+          {firebaseEnabled && user?.email && (
+            <TouchableOpacity style={styles.buttonRow} onPress={handlePasswordReset}>
+              <View style={styles.buttonRowLeft}>
+                <KeyRound color={theme.colors.primary} size={18} />
+                <Text style={styles.buttonText}>Reset password</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity style={styles.buttonRow} onPress={handleUnlink} disabled={busy}>
+            {busy ? (
+              <ActivityIndicator color={theme.colors.primary} />
+            ) : (
+              <Text style={styles.buttonText}>Unlink Partner</Text>
+            )}
           </TouchableOpacity>
+
           {firebaseEnabled && (
             <TouchableOpacity style={styles.buttonRow} onPress={() => signOut()}>
               <Text style={[styles.buttonText, { color: '#ff6b6b' }]}>Log Out</Text>
@@ -89,6 +157,17 @@ export const SettingsScreen = () => {
             </TouchableOpacity>
           )}
         </View>
+
+        {appMeta.supportEmail ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Mail color={theme.colors.secondary} size={18} />
+              <Text style={styles.sectionTitle}>SUPPORT</Text>
+            </View>
+            <Text style={styles.supportText}>{appMeta.supportEmail}</Text>
+            <Text style={styles.supportHint}>{appMeta.projectName} · {appMeta.projectNumber}</Text>
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -176,10 +255,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     marginBottom: 12,
+    minHeight: 56,
+  },
+  buttonRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   buttonText: {
     color: theme.colors.primary,
     fontSize: 16,
     fontWeight: '500',
+  },
+  supportText: {
+    color: theme.colors.primary,
+    fontSize: 15,
+  },
+  supportHint: {
+    color: theme.colors.onSurfaceVariant,
+    fontSize: 12,
+    marginTop: 6,
   },
 });

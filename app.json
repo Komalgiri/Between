@@ -12,7 +12,19 @@
     ],
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "BETWEEN uses your location to show live distance between you and your partner."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "BETWEEN uses Face ID to unlock your Private Vault."
+        }
+      ]
     ],
     "android": {
       "package": "com.anonymous.between"

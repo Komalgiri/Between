@@ -6,6 +6,7 @@ import {
   updateDoc,
   serverTimestamp,
   arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '../lib/firebase';
 import { Relationship } from '../types/firebase';
@@ -120,4 +121,26 @@ export const fetchRelationship = async (
   const snap = await getDoc(doc(getFirebaseDb(), 'relationships', relationshipId));
   if (!snap.exists()) return null;
   return snap.data() as Relationship;
+};
+
+export const unlinkPartner = async (
+  userId: string,
+  relationshipId: string
+): Promise<void> => {
+  const relationshipRef = doc(getFirebaseDb(), 'relationships', relationshipId);
+  const snap = await getDoc(relationshipRef);
+  if (!snap.exists()) {
+    await updateUserProfile(userId, { relationshipId: null, partnerDisplayName: '' });
+    return;
+  }
+
+  const data = snap.data() as Relationship;
+  const partnerId = data.memberIds.find((id) => id !== userId);
+
+  await updateDoc(relationshipRef, { memberIds: arrayRemove(userId) });
+  await updateUserProfile(userId, { relationshipId: null, partnerDisplayName: '' });
+
+  if (partnerId) {
+    await updateUserProfile(partnerId, { partnerDisplayName: '' });
+  }
 };

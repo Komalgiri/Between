@@ -19,9 +19,16 @@
 2. Start in **test mode** for development (replace rules below before production).
 3. Choose a region close to you.
 
-### Storage (optional for now)
+### Storage (for shared moments)
 
-1. **Build → Storage → Get started** (for photos later).
+1. **Build → Storage → Get started**
+2. Deploy rules from `firebase/storage.rules`:
+
+```bash
+firebase deploy --only storage
+```
+
+Or paste rules in the console under **Storage → Rules → Publish**.
 
 ## 3. Register a web app
 
@@ -57,11 +64,24 @@ npx expo start -c
 1. Install Firebase CLI: `npm install -g firebase-tools`
 2. `firebase login`
 3. `firebase init firestore` (select your project, use `firebase/firestore.rules`)
-4. `firebase deploy --only firestore:rules`
+4. `firebase deploy --only firestore:rules,storage`
 
-Or paste rules from `firebase/firestore.rules` in the console under **Firestore → Rules → Publish**.
+Or paste rules from `firebase/firestore.rules` and `firebase/storage.rules` in the console.
 
-## 6. Test with two phones
+## 6. Gemini AI (free tier)
+
+1. Go to [Google AI Studio](https://aistudio.google.com/apikey) and create a **free API key**.
+2. Add to `.env`:
+
+```
+EXPO_PUBLIC_GEMINI_API_KEY=your-key-here
+```
+
+3. Restart Expo: `npx expo start -c`
+
+Powers **AI Letters** and **AI Story** (Gemini 2.0 Flash). For production, move the key to a backend proxy — never ship unrestricted keys in public apps.
+
+## 7. Test with two phones
 
 **Phone A (creates sanctuary)**
 

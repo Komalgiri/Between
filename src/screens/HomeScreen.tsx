@@ -16,6 +16,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { MOOD_LABELS } from '../types/mood';
+import { formatMomentFooter, formatRelativeTime } from '../utils/time';
 
 const { width } = Dimensions.get('window');
 
@@ -27,18 +30,22 @@ export const HomeScreen = () => {
     userName,
     partnerName,
     sharedMomentUri,
+    partnerMomentUri,
+    partnerMomentUpdatedAt,
+    partnerDailyStatus,
     userMood,
     dailyStatus,
-    distanceKm,
+    distanceLabel,
+    distanceLive,
+    locationSharingEnabled,
+    partnerLocationUpdatedAt,
     sharedStoryPreview,
+    memories,
   } = useAppContext();
+  const { firebaseEnabled } = useAuth();
 
-  const moodLabels: Record<string, string> = {
-    serene: 'Serene',
-    connected: 'Connected',
-    pensive: 'Pensive',
-    restful: 'Restful',
-  };
+  const displayMomentUri = partnerMomentUri ?? (firebaseEnabled ? null : sharedMomentUri);
+  const profileInitial = userName.trim().charAt(0).toUpperCase() || '?';
   
   // Animation Values
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
@@ -102,16 +109,16 @@ export const HomeScreen = () => {
               <View style={styles.statusDot} />
             </View>
             <Text style={styles.statusText}>
-              {dailyStatus || `Syncing with ${partnerName}`}
+              {partnerDailyStatus || `Syncing with ${partnerName}`}
             </Text>
             
             {/* Live Connection Indicator */}
             <Animated.View style={[styles.liveGlow, { opacity: glowAnim }]} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.profileButton}>
+        <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Settings')}>
           <View style={styles.profileCircle}>
-            <Text style={styles.profileInitial}>J</Text>
+            <Text style={styles.profileInitial}>{profileInitial}</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -124,21 +131,31 @@ export const HomeScreen = () => {
         <View style={styles.mainCard}>
           <View style={styles.cardGlow} />
           <View style={styles.glassContainer}>
-            <Text style={styles.cardLabel}>{sharedMomentUri ? `${partnerName.toUpperCase()}'S VIBE` : "TODAY'S MOMENT"}</Text>
+            <Text style={styles.cardLabel}>
+              {displayMomentUri ? `${partnerName.toUpperCase()}'S MOMENT` : "TODAY'S MOMENT"}
+            </Text>
             <View style={styles.imagePlaceholder}>
               <RNImage 
-                source={{ uri: sharedMomentUri || 'https://images.unsplash.com/photo-1518131359103-6480ade8268e?q=80&w=2070&auto=format&fit=crop' }} 
+                source={{ uri: displayMomentUri || 'https://images.unsplash.com/photo-1518131359103-6480ade8268e?q=80&w=2070&auto=format&fit=crop' }} 
                 style={styles.mainImage}
                 resizeMode="cover"
               />
               <View style={styles.innerGlow} />
               <View style={styles.imageOverlay}>
-                <Text style={styles.placeholderText}>{sharedMomentUri ? "Sent just now" : "Current Vibe"}</Text>
+                <Text style={styles.placeholderText}>
+                  {displayMomentUri
+                    ? formatRelativeTime(partnerMomentUpdatedAt)
+                    : 'Waiting for a moment'}
+                </Text>
               </View>
             </View>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardTitle}>Stargazing in the living room</Text>
-              <Text style={styles.cardTime}>8:45 PM • 12 May</Text>
+              <Text style={styles.cardTitle}>
+                {displayMomentUri ? `From ${partnerName}` : 'Share a moment with the + button'}
+              </Text>
+              {displayMomentUri && partnerMomentUpdatedAt && (
+                <Text style={styles.cardTime}>{formatMomentFooter(partnerMomentUpdatedAt)}</Text>
+              )}
             </View>
           </View>
         </View>
@@ -151,20 +168,35 @@ export const HomeScreen = () => {
           <TouchableOpacity style={styles.widgetCard} onPress={() => navigation.navigate('MoodTab')}>
             <Heart color={theme.colors.tertiary} size={20} />
             <Text style={styles.widgetLabel}>Your mood</Text>
-            <Text style={styles.widgetValue}>{moodLabels[userMood] ?? userMood}</Text>
+            <Text style={styles.widgetValue}>{MOOD_LABELS[userMood] ?? userMood}</Text>
           </TouchableOpacity>
           <View style={styles.widgetCard}>
             <Sparkles color={theme.colors.secondary} size={20} />
-            <Text style={styles.widgetLabel}>Daily status</Text>
+            <Text style={styles.widgetLabel}>Your status</Text>
             <Text style={styles.widgetValueSmall} numberOfLines={2}>
               {dailyStatus}
             </Text>
           </View>
-          <View style={styles.widgetCard}>
-            <MapPin color="#4ADE80" size={20} />
+          {partnerDailyStatus ? (
+            <View style={styles.widgetCard}>
+              <Heart color={theme.colors.tertiary} size={20} />
+              <Text style={styles.widgetLabel}>{partnerName}</Text>
+              <Text style={styles.widgetValueSmall} numberOfLines={2}>
+                {partnerDailyStatus}
+              </Text>
+            </View>
+          ) : null}
+          <View style={[styles.widgetCard, distanceLive && styles.widgetCardLive]}>
+            <MapPin color={distanceLive ? '#4ADE80' : theme.colors.onSurfaceVariant} size={20} />
             <Text style={styles.widgetLabel}>Distance</Text>
-            <Text style={styles.widgetValue}>{distanceKm} km</Text>
-            <Text style={styles.widgetHint}>apart right now</Text>
+            <Text style={styles.widgetValue}>{distanceLabel}</Text>
+            <Text style={styles.widgetHint}>
+              {distanceLive
+                ? `Live · ${formatRelativeTime(partnerLocationUpdatedAt)}`
+                : locationSharingEnabled
+                  ? `Waiting for ${partnerName}'s location`
+                  : 'Enable location to track'}
+            </Text>
           </View>
           {sharedStoryPreview && (
             <TouchableOpacity
@@ -172,9 +204,11 @@ export const HomeScreen = () => {
               onPress={() => navigation.navigate('SharedStory')}
             >
               <PenLine color={theme.colors.primary} size={20} />
-              <Text style={styles.widgetLabel}>Story sent</Text>
+              <Text style={styles.widgetLabel}>
+                {sharedStoryPreview.isLive ? 'Drawing live' : 'Story sent'}
+              </Text>
               <Text style={styles.widgetValueSmall}>
-                {sharedStoryPreview.stickerCount} stickers · just now
+                {sharedStoryPreview.strokeCount} strokes · {sharedStoryPreview.stickerCount} stickers
               </Text>
             </TouchableOpacity>
           )}
@@ -217,6 +251,10 @@ export const HomeScreen = () => {
             <Mail color={theme.colors.primary} size={16} />
             <Text style={styles.secondaryChipText}>Letters</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryChip} onPress={() => navigation.navigate('StoryGenerator')}>
+            <Sparkles color={theme.colors.primary} size={16} />
+            <Text style={styles.secondaryChipText}>AI Story</Text>
+          </TouchableOpacity>
         </View>
 
         {/* The Sanctuary Section */}
@@ -230,7 +268,11 @@ export const HomeScreen = () => {
         <TouchableOpacity style={styles.vaultPreview} onPress={() => navigation.navigate('PrivateVault')}>
           <View style={styles.vaultCard}>
             <Text style={styles.vaultTitle}>Private Vault</Text>
-            <Text style={styles.vaultCount}>12 Locked Memories</Text>
+            <Text style={styles.vaultCount}>
+              {memories.length === 0
+                ? 'No memories yet'
+                : `${memories.length} Shared ${memories.length === 1 ? 'Memory' : 'Memories'}`}
+            </Text>
           </View>
         </TouchableOpacity>
       </ScrollView>
@@ -412,6 +454,10 @@ const styles = StyleSheet.create({
     padding: 16,
     marginRight: 12,
     justifyContent: 'space-between',
+  },
+  widgetCardLive: {
+    borderColor: 'rgba(74, 222, 128, 0.35)',
+    backgroundColor: 'rgba(74, 222, 128, 0.06)',
   },
   widgetLabel: {
     fontSize: 10,

@@ -6,24 +6,63 @@ import {
   TouchableOpacity,
   TextInput,
   Image as RNImage,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { theme } from '../theme/theme';
 import { X, Camera, MapPin, Heart, Sparkles } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-
-const { width, height } = Dimensions.get('window');
+import { useAppContext } from '../context/AppContext';
+import * as ImagePicker from 'expo-image-picker';
 
 export const CreateMemoryScreen = () => {
   const navigation = useNavigation();
+  const { partnerName, createMemory } = useAppContext();
   const [note, setNote] = useState('');
   const [location, setLocation] = useState('Home Sanctuary');
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow photo access to attach a memory image.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 5],
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!note.trim()) return;
+    setSaving(true);
+    try {
+      await createMemory({
+        note: note.trim(),
+        location,
+        mood: 'Atmospheric',
+        localImageUri: imageUri,
+      });
+      navigation.goBack();
+    } catch {
+      Alert.alert('Could not save', 'Check your connection and Firebase rules.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
@@ -32,25 +71,31 @@ export const CreateMemoryScreen = () => {
           <X color={theme.colors.primary} size={24} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New Memory</Text>
-        <TouchableOpacity 
-          style={[styles.publishButton, !note && styles.publishButtonDisabled]} 
-          onPress={() => navigation.goBack()}
-          disabled={!note}
+        <TouchableOpacity
+          style={[styles.publishButton, (!note.trim() || saving) && styles.publishButtonDisabled]}
+          onPress={handleShare}
+          disabled={!note.trim() || saving}
         >
-          <Text style={styles.publishText}>SHARE</Text>
+          {saving ? (
+            <ActivityIndicator color={theme.colors.background} size="small" />
+          ) : (
+            <Text style={styles.publishText}>SHARE</Text>
+          )}
         </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Photo Selection Area */}
-        <TouchableOpacity style={styles.photoContainer}>
-          <View style={styles.photoPlaceholder}>
-            <Camera color="rgba(197, 197, 216, 0.4)" size={48} strokeWidth={1} />
-            <Text style={styles.photoHint}>Tap to add a moment</Text>
-          </View>
+        <TouchableOpacity style={styles.photoContainer} onPress={pickImage}>
+          {imageUri ? (
+            <RNImage source={{ uri: imageUri }} style={styles.photoImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <Camera color="rgba(197, 197, 216, 0.4)" size={48} strokeWidth={1} />
+              <Text style={styles.photoHint}>Tap to add a moment</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
-        {/* Note Input */}
         <View style={styles.inputSection}>
           <View style={styles.inputWrapper}>
             <TextInput
@@ -65,19 +110,23 @@ export const CreateMemoryScreen = () => {
           </View>
         </View>
 
-        {/* Metadata Options */}
         <View style={styles.metaSection}>
-          <TouchableOpacity style={styles.metaItem}>
+          <View style={styles.metaItem}>
             <View style={styles.metaIconWrapper}>
               <MapPin color={theme.colors.secondary} size={18} />
             </View>
             <View style={styles.metaTextWrapper}>
               <Text style={styles.metaLabel}>LOCATION</Text>
-              <Text style={styles.metaValue}>{location}</Text>
+              <TextInput
+                style={styles.metaValueInput}
+                value={location}
+                onChangeText={setLocation}
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+              />
             </View>
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity style={styles.metaItem}>
+          <View style={styles.metaItem}>
             <View style={styles.metaIconWrapper}>
               <Sparkles color={theme.colors.tertiary} size={18} />
             </View>
@@ -85,13 +134,14 @@ export const CreateMemoryScreen = () => {
               <Text style={styles.metaLabel}>MOOD</Text>
               <Text style={styles.metaValue}>Atmospheric</Text>
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Privacy Note */}
         <View style={styles.privacyNote}>
           <Heart color="rgba(216, 167, 177, 0.4)" size={14} fill="rgba(216, 167, 177, 0.1)" />
-          <Text style={styles.privacyText}>This memory will only be visible to you and Sarah.</Text>
+          <Text style={styles.privacyText}>
+            This memory will only be visible to you and {partnerName}.
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -127,6 +177,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 12,
+    minWidth: 72,
+    alignItems: 'center',
   },
   publishButtonDisabled: {
     opacity: 0.3,
@@ -151,6 +203,10 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     overflow: 'hidden',
     marginBottom: 32,
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
   },
   photoPlaceholder: {
     flex: 1,
@@ -216,6 +272,12 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontSize: 14,
     fontWeight: '500',
+  },
+  metaValueInput: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 0,
   },
   privacyNote: {
     flexDirection: 'row',

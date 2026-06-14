@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { theme } from '../theme/theme';
 import {
@@ -22,10 +24,21 @@ import {
   NEVER_HAVE_I_EVER,
   WOULD_YOU_RATHER,
   getDailyQuestionForDate,
+  parseWyrOptions,
   pickRandomPrompt,
 } from '../data/playContent';
-
-type PlayMode = 'daily' | 'nhie' | 'wyr';
+import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import {
+  buildPlayDocId,
+  getPartnerResponse,
+  submitPlayResponse,
+  subscribeToPlayMeta,
+  subscribeToPlaySession,
+  updatePlayMetaPrompt,
+} from '../services/playService';
+import { PlayMode } from '../types/firebase';
+import { dateKeyToday } from '../utils/anniversary';
 
 const MODES: { id: PlayMode; label: string }[] = [
   { id: 'daily', label: 'Daily Q' },
@@ -35,20 +48,155 @@ const MODES: { id: PlayMode; label: string }[] = [
 
 export const PlayHubScreen = () => {
   const navigation = useNavigation();
+  const { partnerName, userName, relationshipId } = useAppContext();
+  const { firebaseEnabled, user } = useAuth();
+
   const [mode, setMode] = useState<PlayMode>('daily');
   const [answer, setAnswer] = useState('');
   const [nhiePrompt, setNhiePrompt] = useState(() => pickRandomPrompt(NEVER_HAVE_I_EVER));
   const [wyrPrompt, setWyrPrompt] = useState(() => pickRandomPrompt(WOULD_YOU_RATHER));
+  const [sending, setSending] = useState(false);
+  const [partnerAnswer, setPartnerAnswer] = useState('');
+  const [partnerVote, setPartnerVote] = useState<'yes' | 'no' | null>(null);
+  const [partnerChoice, setPartnerChoice] = useState<'a' | 'b' | null>(null);
+  const [myVote, setMyVote] = useState<'yes' | 'no' | null>(null);
+  const [myChoice, setMyChoice] = useState<'a' | 'b' | null>(null);
+  const skipMetaEcho = useRef(false);
 
   const dailyQuestion = useMemo(() => getDailyQuestionForDate(), []);
+  const dateKey = dateKeyToday();
 
-  const shufflePrompt = () => {
-    if (mode === 'nhie') setNhiePrompt(pickRandomPrompt(NEVER_HAVE_I_EVER));
-    if (mode === 'wyr') setWyrPrompt(pickRandomPrompt(WOULD_YOU_RATHER));
+  const activePromptId =
+    mode === 'daily' ? dailyQuestion.id : mode === 'nhie' ? nhiePrompt.id : wyrPrompt.id;
+  const activePromptText =
+    mode === 'daily' ? dailyQuestion.text : mode === 'nhie' ? nhiePrompt.text : wyrPrompt.text;
+
+  const playDocId = buildPlayDocId(mode, activePromptId, dateKey);
+  const wyrOptions = useMemo(
+    () => (mode === 'wyr' ? parseWyrOptions(activePromptText) : null),
+    [mode, activePromptText]
+  );
+
+  useEffect(() => {
+    if (!firebaseEnabled || !relationshipId) return;
+
+    return subscribeToPlayMeta(relationshipId, (meta) => {
+      if (skipMetaEcho.current) return;
+      if (meta.nhiePromptId) {
+        const prompt = NEVER_HAVE_I_EVER.find((p) => p.id === meta.nhiePromptId);
+        if (prompt) setNhiePrompt(prompt);
+      }
+      if (meta.wyrPromptId) {
+        const prompt = WOULD_YOU_RATHER.find((p) => p.id === meta.wyrPromptId);
+        if (prompt) setWyrPrompt(prompt);
+      }
+    });
+  }, [firebaseEnabled, relationshipId]);
+
+  useEffect(() => {
+    if (!firebaseEnabled || !user || !relationshipId) {
+      setPartnerAnswer('');
+      setPartnerVote(null);
+      setPartnerChoice(null);
+      setMyVote(null);
+      setMyChoice(null);
+      return;
+    }
+
+    return subscribeToPlaySession(relationshipId, playDocId, (session) => {
+      const partner = getPartnerResponse(session, user.uid);
+      const mine = session?.responses[user.uid];
+      setPartnerAnswer(partner?.answer ?? '');
+      setPartnerVote(partner?.vote ?? null);
+      setPartnerChoice(partner?.choice ?? null);
+      setMyVote(mine?.vote ?? null);
+      setMyChoice(mine?.choice ?? null);
+      if (mine?.answer && mode === 'daily') setAnswer(mine.answer);
+    });
+  }, [firebaseEnabled, user, relationshipId, playDocId, mode]);
+
+  useEffect(() => {
+    if (mode !== 'daily') setAnswer('');
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === 'daily') return;
+    setMyVote(null);
+    setMyChoice(null);
+    setPartnerVote(null);
+    setPartnerChoice(null);
+  }, [mode, activePromptId]);
+
+  const shufflePrompt = async () => {
+    if (mode === 'nhie') {
+      const next = pickRandomPrompt(NEVER_HAVE_I_EVER);
+      setNhiePrompt(next);
+      if (firebaseEnabled && relationshipId) {
+        skipMetaEcho.current = true;
+        try {
+          await updatePlayMetaPrompt(relationshipId, 'nhie', next.id);
+        } finally {
+          setTimeout(() => {
+            skipMetaEcho.current = false;
+          }, 400);
+        }
+      }
+    }
+    if (mode === 'wyr') {
+      const next = pickRandomPrompt(WOULD_YOU_RATHER);
+      setWyrPrompt(next);
+      if (firebaseEnabled && relationshipId) {
+        skipMetaEcho.current = true;
+        try {
+          await updatePlayMetaPrompt(relationshipId, 'wyr', next.id);
+        } finally {
+          setTimeout(() => {
+            skipMetaEcho.current = false;
+          }, 400);
+        }
+      }
+    }
   };
 
-  const activePrompt =
-    mode === 'daily' ? dailyQuestion.text : mode === 'nhie' ? nhiePrompt.text : wyrPrompt.text;
+  const sendResponse = async (data: { answer?: string; vote?: 'yes' | 'no'; choice?: 'a' | 'b' }) => {
+    if (!firebaseEnabled || !user || !relationshipId) {
+      Alert.alert('Offline mode', 'Sign in with Firebase to sync answers with your partner.');
+      return;
+    }
+
+    setSending(true);
+    try {
+      await submitPlayResponse(
+        relationshipId,
+        user.uid,
+        userName,
+        { mode, promptId: activePromptId, promptText: activePromptText, dateKey },
+        data
+      );
+      if (data.vote) setMyVote(data.vote);
+      if (data.choice) setMyChoice(data.choice);
+      if (data.answer) {
+        Alert.alert('Sent', `${partnerName} can see your answer.`);
+      }
+    } catch {
+      Alert.alert('Could not send', 'Check your connection and Firestore rules.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const partnerVoteLabel =
+    partnerVote === 'yes' ? 'Done it!' : partnerVote === 'no' ? 'Nope' : null;
+
+  const partnerChoiceLabel =
+    partnerChoice && wyrOptions
+      ? partnerChoice === 'a'
+        ? wyrOptions[0]
+        : wyrOptions[1]
+      : null;
+
+  const choicesMatch =
+    mode === 'wyr' && myChoice && partnerChoice ? myChoice === partnerChoice : false;
 
   return (
     <View style={styles.container}>
@@ -60,16 +208,12 @@ export const PlayHubScreen = () => {
         <View style={styles.backBtn} />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.heroCard}>
           <Sparkles color={theme.colors.tertiary} size={28} />
-          <Text style={styles.heroTitle}>3,000+ conversation starters</Text>
+          <Text style={styles.heroTitle}>Play together, stay close</Text>
           <Text style={styles.heroSubtitle}>
-            {DAILY_QUESTIONS.length} daily questions in-app today — the full library
-            grows with each release. New prompt every day.
+            Answers sync live between you and {partnerName}.
           </Text>
         </View>
 
@@ -92,9 +236,13 @@ export const PlayHubScreen = () => {
 
         <View style={styles.promptCard}>
           <Text style={styles.promptLabel}>
-            {mode === 'daily' ? "TODAY'S QUESTION" : mode === 'nhie' ? 'NEVER HAVE I EVER' : 'WOULD YOU RATHER'}
+            {mode === 'daily'
+              ? "TODAY'S QUESTION"
+              : mode === 'nhie'
+                ? 'NEVER HAVE I EVER'
+                : 'WOULD YOU RATHER'}
           </Text>
-          <Text style={styles.promptText}>{activePrompt}</Text>
+          <Text style={styles.promptText}>{activePromptText}</Text>
 
           {mode === 'daily' && (
             <>
@@ -107,29 +255,97 @@ export const PlayHubScreen = () => {
                 onChangeText={setAnswer}
                 multiline
               />
-              <TouchableOpacity style={styles.primaryBtn}>
-                <MessageCircle color={theme.colors.background} size={18} />
-                <Text style={styles.primaryBtnText}>Send to Partner</Text>
+              <TouchableOpacity
+                style={[styles.primaryBtn, sending && styles.primaryBtnDisabled]}
+                onPress={() => sendResponse({ answer })}
+                disabled={sending || !answer.trim()}
+              >
+                {sending ? (
+                  <ActivityIndicator color={theme.colors.background} />
+                ) : (
+                  <>
+                    <MessageCircle color={theme.colors.background} size={18} />
+                    <Text style={styles.primaryBtnText}>Send to Partner</Text>
+                  </>
+                )}
               </TouchableOpacity>
+              {partnerAnswer ? (
+                <View style={styles.partnerBox}>
+                  <Text style={styles.partnerLabel}>{partnerName}'s answer</Text>
+                  <Text style={styles.partnerText}>{partnerAnswer}</Text>
+                </View>
+              ) : null}
             </>
           )}
 
-          {mode !== 'daily' && (
+          {mode === 'nhie' && (
             <View style={styles.gameActions}>
               <TouchableOpacity style={styles.secondaryBtn} onPress={shufflePrompt}>
                 <Shuffle color={theme.colors.primary} size={18} />
                 <Text style={styles.secondaryBtnText}>Next Card</Text>
               </TouchableOpacity>
               <View style={styles.voteRow}>
-                <TouchableOpacity style={styles.voteBtn}>
+                <TouchableOpacity
+                  style={[styles.voteBtn, myVote === 'no' && styles.voteBtnSelected]}
+                  onPress={() => sendResponse({ vote: 'no' })}
+                  disabled={sending}
+                >
                   <ThumbsDown color={theme.colors.primary} size={22} />
                   <Text style={styles.voteLabel}>Nope</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.voteBtn, styles.voteBtnYes]}>
+                <TouchableOpacity
+                  style={[styles.voteBtn, styles.voteBtnYes, myVote === 'yes' && styles.voteBtnYesSelected]}
+                  onPress={() => sendResponse({ vote: 'yes' })}
+                  disabled={sending}
+                >
                   <ThumbsUp color={theme.colors.background} size={22} />
                   <Text style={[styles.voteLabel, styles.voteLabelYes]}>Done it!</Text>
                 </TouchableOpacity>
               </View>
+              {partnerVoteLabel ? (
+                <View style={styles.partnerBox}>
+                  <Text style={styles.partnerLabel}>{partnerName} voted</Text>
+                  <Text style={styles.partnerText}>{partnerVoteLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          {mode === 'wyr' && wyrOptions && (
+            <View style={styles.gameActions}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={shufflePrompt}>
+                <Shuffle color={theme.colors.primary} size={18} />
+                <Text style={styles.secondaryBtnText}>Next Card</Text>
+              </TouchableOpacity>
+              <View style={styles.wyrOptions}>
+                <TouchableOpacity
+                  style={[styles.wyrBtn, myChoice === 'a' && styles.wyrBtnSelected]}
+                  onPress={() => sendResponse({ choice: 'a' })}
+                  disabled={sending}
+                >
+                  <Text style={styles.wyrBtnLabel}>A</Text>
+                  <Text style={styles.wyrBtnText}>{wyrOptions[0]}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.wyrBtn, myChoice === 'b' && styles.wyrBtnSelected]}
+                  onPress={() => sendResponse({ choice: 'b' })}
+                  disabled={sending}
+                >
+                  <Text style={styles.wyrBtnLabel}>B</Text>
+                  <Text style={styles.wyrBtnText}>{wyrOptions[1]}</Text>
+                </TouchableOpacity>
+              </View>
+              {partnerChoiceLabel ? (
+                <View style={styles.partnerBox}>
+                  <Text style={styles.partnerLabel}>{partnerName} picked</Text>
+                  <Text style={styles.partnerText}>{partnerChoiceLabel}</Text>
+                  {choicesMatch ? (
+                    <Text style={styles.matchText}>You matched on this one!</Text>
+                  ) : myChoice ? (
+                    <Text style={styles.matchTextMuted}>Different picks — talk it through</Text>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           )}
         </View>
@@ -266,11 +482,36 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderRadius: theme.roundness.lg,
     paddingVertical: 14,
+    minHeight: 48,
+  },
+  primaryBtnDisabled: {
+    opacity: 0.6,
   },
   primaryBtnText: {
     color: theme.colors.background,
     fontWeight: '700',
     fontSize: 14,
+  },
+  partnerBox: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: theme.roundness.lg,
+    backgroundColor: 'rgba(236, 185, 196, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(236, 185, 196, 0.2)',
+  },
+  partnerLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: theme.colors.tertiary,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  partnerText: {
+    fontSize: 15,
+    color: theme.colors.primary,
+    lineHeight: 22,
   },
   gameActions: {
     gap: 16,
@@ -307,6 +548,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.tertiary,
     borderColor: theme.colors.tertiary,
   },
+  voteBtnSelected: {
+    borderColor: theme.colors.primary,
+    backgroundColor: 'rgba(245, 245, 220, 0.12)',
+  },
+  voteBtnYesSelected: {
+    opacity: 0.85,
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+  },
   voteLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -314,5 +564,43 @@ const styles = StyleSheet.create({
   },
   voteLabelYes: {
     color: theme.colors.background,
+  },
+  wyrOptions: {
+    gap: 12,
+  },
+  wyrBtn: {
+    padding: 16,
+    borderRadius: theme.roundness.lg,
+    backgroundColor: theme.colors.glass,
+    borderWidth: 1,
+    borderColor: theme.colors.glassBorder,
+    gap: 6,
+  },
+  wyrBtnSelected: {
+    borderColor: theme.colors.tertiary,
+    backgroundColor: 'rgba(236, 185, 196, 0.12)',
+  },
+  wyrBtnLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: theme.colors.tertiary,
+  },
+  wyrBtnText: {
+    fontSize: 15,
+    color: theme.colors.primary,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  matchText: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4ADE80',
+  },
+  matchTextMuted: {
+    marginTop: 8,
+    fontSize: 12,
+    color: theme.colors.onSurfaceVariant,
   },
 });

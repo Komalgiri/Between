@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,36 +7,109 @@ import {
   Dimensions,
   Image as RNImage,
   ScrollView,
+  TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { theme } from '../theme/theme';
 import { ArrowLeft, CalendarHeart, Gift, Clock, Wine, Star } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/RootNavigator';
+import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { addReminder, subscribeToReminders, ReminderItem } from '../services/reminderService';
+import {
+  formatAnniversaryLabel,
+  getDaysUntilNextAnniversary,
+  getDurationStats,
+  getYearsTogether,
+} from '../utils/anniversary';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
-const REMINDERS = [
-  { id: '1', title: 'Dinner at Lumiere', date: 'Tonight, 8:00 PM', type: 'date', Icon: Wine },
-  { id: '2', title: 'Pick up flowers', date: 'Tomorrow, 5:00 PM', type: 'gift', Icon: Gift },
-  { id: '3', title: 'First Kiss Anniversary', date: 'In 3 days', type: 'milestone', Icon: Star },
-];
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const REMINDER_ICONS = {
+  date: Wine,
+  gift: Gift,
+  milestone: Star,
+} as const;
 
 export const AnniversaryScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
+  const { anniversary, partnerName, relationshipId } = useAppContext();
+  const { firebaseEnabled, user } = useAuth();
+
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDueLabel, setNewDueLabel] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!firebaseEnabled || !relationshipId) return;
+    return subscribeToReminders(relationshipId, setReminders);
+  }, [firebaseEnabled, relationshipId]);
+
+  const daysUntil = useMemo(() => getDaysUntilNextAnniversary(anniversary), [anniversary]);
+  const yearsTogether = useMemo(() => getYearsTogether(anniversary), [anniversary]);
+  const durationStats = useMemo(() => getDurationStats(anniversary), [anniversary]);
+  const hasAnniversary = Boolean(anniversary.trim() && daysUntil !== null);
+
+  const countdownText = hasAnniversary
+    ? daysUntil === 0
+      ? 'TODAY IS OUR ANNIVERSARY'
+      : `${daysUntil} DAY${daysUntil === 1 ? '' : 'S'} UNTIL OUR ANNIVERSARY`
+    : 'SET YOUR DATE IN ONBOARDING';
+
+  const heroTitle = hasAnniversary
+    ? formatAnniversaryLabel(yearsTogether ?? 0)
+    : 'Your story begins here';
+
+  const handleAddReminder = async () => {
+    if (!newTitle.trim() || !newDueLabel.trim()) {
+      Alert.alert('Add details', 'Enter a title and when it happens.');
+      return;
+    }
+    if (!firebaseEnabled || !user || !relationshipId) {
+      Alert.alert('Offline', 'Sign in with Firebase to share reminders.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await addReminder(relationshipId, user.uid, {
+        title: newTitle.trim(),
+        dueLabel: newDueLabel.trim(),
+        type: 'milestone',
+      });
+      setNewTitle('');
+      setNewDueLabel('');
+      setShowAddForm(false);
+    } catch {
+      Alert.alert('Could not save', 'Check Firestore rules.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         bounces={false}
       >
-        {/* Hero Section */}
         <View style={styles.heroSection}>
-          <RNImage 
-            source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBGs-JZf-6e7hjaZjBMJYf-lKSXNnDA_9kl7fsg17OhGNS3O-HeqEpIh4WAKRJCLvP9dL6kxJ-Orej-VQysoWOH7EEYSKVJj8yD9febTr2pkp3IMtiNpR3dHvSckK6qtP-YOfEjHmSOO6uceAx3eGtm4xiZD27eop0gQgphpoIdk_BWlymAkoWfgKUYrCjFr87gFsHF_t8WGminUaVZab7oGQQXzVC4Tgg-bJ7qGpVxK-DtN2442jGfFuqCDyAyEb7y88g-euCN9g' }}
+          <RNImage
+            source={{
+              uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBGs-JZf-6e7hjaZjBMJYf-lKSXNnDA_9kl7fsg17OhGNS3O-HeqEpIh4WAKRJCLvP9dL6kxJ-Orej-VQysoWOH7EEYSKVJj8yD9febTr2pkp3IMtiNpR3dHvSckK6qtP-YOfEjHmSOO6uceAx3eGtm4xiZD27eop0gQgphpoIdk_BWlymAkoWfgKUYrCjFr87gFsHF_t8WGminUaVZab7oGQQXzVC4Tgg-bJ7qGpVxK-DtN2442jGfFuqCDyAyEb7y88g-euCN9g',
+            }}
             style={styles.heroImage}
           />
           <View style={styles.heroOverlay} />
-          
+
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
               <ArrowLeft color={theme.colors.primary} size={24} />
@@ -46,45 +119,108 @@ export const AnniversaryScreen = () => {
           <View style={styles.heroContent}>
             <View style={styles.countdownPill}>
               <CalendarHeart color={theme.colors.background} size={16} />
-              <Text style={styles.countdownText}>14 DAYS UNTIL OUR ANNIVERSARY</Text>
+              <Text style={styles.countdownText}>{countdownText}</Text>
             </View>
-            <Text style={styles.heroTitle}>2 Years Together</Text>
-            <Text style={styles.heroSubtitle}>Every moment has led to this beautiful chapter.</Text>
+            <Text style={styles.heroTitle}>{heroTitle}</Text>
+            <Text style={styles.heroSubtitle}>
+              {hasAnniversary
+                ? `Every moment with ${partnerName} has led to this beautiful chapter.`
+                : 'Complete onboarding with your anniversary date to unlock the countdown.'}
+            </Text>
           </View>
         </View>
 
-        {/* Reminders List */}
         <View style={styles.contentSection}>
+          {durationStats && (
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statNumber}>{durationStats.months}</Text>
+                <Text style={styles.statLabel}>MONTHS</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statNumber}>{durationStats.weeks}</Text>
+                <Text style={styles.statLabel}>WEEKS</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statNumber}>{durationStats.days}</Text>
+                <Text style={styles.statLabel}>DAYS</Text>
+              </View>
+            </View>
+          )}
+
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Upcoming</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllBtn}>ADD NEW</Text>
+            <TouchableOpacity onPress={() => setShowAddForm((v) => !v)}>
+              <Text style={styles.viewAllBtn}>{showAddForm ? 'CANCEL' : 'ADD NEW'}</Text>
             </TouchableOpacity>
           </View>
 
+          {showAddForm && (
+            <View style={styles.addForm}>
+              <TextInput
+                style={styles.addInput}
+                placeholder="Reminder title"
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+                value={newTitle}
+                onChangeText={setNewTitle}
+              />
+              <TextInput
+                style={styles.addInput}
+                placeholder="When (e.g. In 3 days, Tomorrow 8 PM)"
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+                value={newDueLabel}
+                onChangeText={setNewDueLabel}
+              />
+              <TouchableOpacity
+                style={[styles.addBtn, saving && styles.addBtnDisabled]}
+                onPress={handleAddReminder}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color={theme.colors.background} />
+                ) : (
+                  <Text style={styles.addBtnText}>SAVE REMINDER</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.remindersList}>
-            {REMINDERS.map((reminder) => (
-              <View key={reminder.id} style={styles.reminderCard}>
-                <View style={styles.reminderIconBox}>
-                  <reminder.Icon color={theme.colors.primary} size={24} />
-                </View>
-                <View style={styles.reminderInfo}>
-                  <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                  <View style={styles.reminderTimeRow}>
-                    <Clock color={theme.colors.secondary} size={12} />
-                    <Text style={styles.reminderDate}>{reminder.date}</Text>
+            {reminders.length === 0 ? (
+              <Text style={styles.emptyReminders}>No reminders yet — add one for {partnerName}.</Text>
+            ) : (
+              reminders.map((reminder) => {
+                const Icon = REMINDER_ICONS[reminder.type] ?? Star;
+                return (
+                  <View key={reminder.id} style={styles.reminderCard}>
+                    <View style={styles.reminderIconBox}>
+                      <Icon color={theme.colors.primary} size={24} />
+                    </View>
+                    <View style={styles.reminderInfo}>
+                      <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                      <View style={styles.reminderTimeRow}>
+                        <Clock color={theme.colors.secondary} size={12} />
+                        <Text style={styles.reminderDate}>{reminder.dueLabel}</Text>
+                      </View>
+                    </View>
                   </View>
-                </View>
-              </View>
-            ))}
+                );
+              })
+            )}
           </View>
 
-          {/* Firsts Collection Promo */}
-          <TouchableOpacity style={styles.firstsPromo}>
+          <TouchableOpacity
+            style={styles.firstsPromo}
+            onPress={() => navigation.navigate('MainApp', { screen: 'TimelineTab' })}
+          >
             <View style={styles.firstsPromoGlow} />
             <Text style={styles.firstsLabel}>OUR ARCHIVE</Text>
-            <Text style={styles.firstsTitle}>Look back at our "Firsts"</Text>
-            <ArrowLeft style={{ transform: [{ rotate: '180deg' }], marginTop: 16 }} color={theme.colors.primary} size={24} />
+            <Text style={styles.firstsTitle}>Look back at our memories</Text>
+            <ArrowLeft
+              style={{ transform: [{ rotate: '180deg' }], marginTop: 16 }}
+              color={theme.colors.primary}
+              size={24}
+            />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -165,6 +301,30 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 32,
   },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 32,
+    paddingVertical: 20,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  statBox: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 22,
+    color: theme.colors.primary,
+    fontWeight: '700',
+  },
+  statLabel: {
+    fontSize: 10,
+    color: theme.colors.onSurfaceVariant,
+    letterSpacing: 1,
+    marginTop: 4,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -182,9 +342,49 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 2,
   },
+  addForm: {
+    gap: 10,
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  addInput: {
+    backgroundColor: theme.colors.glass,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.glassBorder,
+    padding: 14,
+    color: theme.colors.primary,
+    fontSize: 15,
+  },
+  addBtn: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  addBtnDisabled: {
+    opacity: 0.7,
+  },
+  addBtnText: {
+    color: theme.colors.background,
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 1,
+  },
   remindersList: {
     gap: 16,
     marginBottom: 40,
+  },
+  emptyReminders: {
+    color: theme.colors.onSurfaceVariant,
+    fontSize: 14,
+    lineHeight: 22,
   },
   reminderCard: {
     flexDirection: 'row',
@@ -238,11 +438,6 @@ const styles = StyleSheet.create({
     height: 150,
     backgroundColor: 'rgba(236, 185, 196, 0.2)',
     borderRadius: 75,
-    shadowColor: '#ecb9c4',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 40,
-    elevation: 10,
   },
   firstsLabel: {
     color: '#ecb9c4',
