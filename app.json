@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "BETWEEN",
+    "slug": "between",
+    "version": "1.0.0",
+    "icon": "./src/LOGO.png",
+    "orientation": "portrait",
+    "scheme": "between",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ],
+    "android": {
+      "package": "com.anonymous.between"
+    },
+    "ios": {
+      "bundleIdentifier": "com.anonymous.between"
+    }
+  }
+}
