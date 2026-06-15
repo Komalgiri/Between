@@ -1,6 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { CompositeNavigationProp } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Home, Heart, Plus, Camera, MessageCircle } from 'lucide-react-native';
 
 import { HomeScreen } from '../screens/HomeScreen';
@@ -8,39 +11,31 @@ import { MoodSyncScreen } from '../screens/MoodSyncScreen';
 import { MemoryTimelineScreen } from '../screens/MemoryTimelineScreen';
 import { AILetterScreen } from '../screens/AILetterScreen';
 import { theme } from '../theme/theme';
-import { useAppContext } from '../context/AppContext';
-import { useAuth } from '../context/AuthContext';
+import { RootStackParamList } from './RootNavigator';
 import { pickMomentImage } from '../utils/shareMomentPicker';
 
 const Tab = createBottomTabNavigator();
 
+type TabParamList = {
+  HomeTab: undefined;
+  MoodTab: undefined;
+  AddTab: undefined;
+  TimelineTab: undefined;
+  LettersTab: undefined;
+};
+
+type TabNav = CompositeNavigationProp<
+  BottomTabNavigationProp<TabParamList, 'AddTab'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
 const EmptyScreen = () => null;
 
 export const TabNavigator = () => {
-  const { shareMoment } = useAppContext();
-  const { firebaseEnabled } = useAuth();
-
-  const shareMomentPhoto = async () => {
+  const openMomentCreator = async (navigation: TabNav) => {
     const uri = await pickMomentImage();
     if (!uri) return;
-
-    try {
-      await shareMoment(uri);
-      Alert.alert(
-        'Moment shared',
-        firebaseEnabled
-          ? 'Your partner will see it on Home.'
-          : 'Saved locally for this session.'
-      );
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Upload failed';
-      Alert.alert(
-        'Could not share',
-        firebaseEnabled
-          ? `${message}\n\nTry a smaller photo or check your connection.`
-          : message
-      );
-    }
+    navigation.getParent()?.navigate('ShareMoment', { imageUri: uri });
   };
 
   return (
@@ -70,7 +65,6 @@ export const TabNavigator = () => {
         }}
       />
       
-      {/* Floating Add Button */}
       <Tab.Screen 
         name="AddTab" 
         component={EmptyScreen}
@@ -86,7 +80,7 @@ export const TabNavigator = () => {
         listeners={({ navigation }) => ({
           tabPress: (e) => {
             e.preventDefault();
-            shareMomentPhoto();
+            openMomentCreator(navigation as TabNav);
           },
         })}
       />

@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { theme } from '../theme/theme';
-import { Sparkles, Hourglass, Mail, BookOpen, Gamepad2, PenLine, Heart } from 'lucide-react-native';
+import { Sparkles, Hourglass, Mail, BookOpen, Gamepad2, PenLine, Heart, Camera } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -31,9 +31,7 @@ export const HomeScreen = () => {
   const {
     userName,
     partnerName,
-    sharedMomentUri,
-    partnerMomentUri,
-    partnerMomentUpdatedAt,
+    sharedMoments,
     partnerDailyStatus,
     userMood,
     dailyStatus,
@@ -42,11 +40,19 @@ export const HomeScreen = () => {
     distanceLive,
     refreshLocation,
     sharedStoryPreview,
-    memories,
+    vaultMemories,
   } = useAppContext();
-  const { firebaseEnabled } = useAuth();
+  const { user } = useAuth();
 
-  const displayMomentUri = partnerMomentUri ?? (firebaseEnabled ? null : sharedMomentUri);
+  const partnerMoments = React.useMemo(
+    () => sharedMoments.filter((m) => m.userId !== user?.uid),
+    [sharedMoments, user?.uid]
+  );
+  const latestPartnerMoment = partnerMoments[0] ?? null;
+  const pastPartnerMoments = partnerMoments.slice(1);
+  const momentCardLabel = latestPartnerMoment
+    ? `${(latestPartnerMoment.displayName || partnerName).toUpperCase()}'S MOMENT`
+    : "TODAY'S MOMENT";
   const profileInitial = userName.trim().charAt(0).toUpperCase() || '?';
   
   // Animation Values
@@ -153,34 +159,69 @@ export const HomeScreen = () => {
         <View style={styles.mainCard}>
           <View style={styles.cardGlow} />
           <View style={styles.glassContainer}>
-            <Text style={styles.cardLabel}>
-              {displayMomentUri ? `${partnerName.toUpperCase()}'S MOMENT` : "TODAY'S MOMENT"}
-            </Text>
+            <Text style={styles.cardLabel}>{momentCardLabel}</Text>
             <View style={styles.imagePlaceholder}>
               <RNImage 
-                source={{ uri: displayMomentUri || 'https://images.unsplash.com/photo-1518131359103-6480ade8268e?q=80&w=2070&auto=format&fit=crop' }} 
+                source={{ uri: latestPartnerMoment?.imageUrl || 'https://images.unsplash.com/photo-1518131359103-6480ade8268e?q=80&w=2070&auto=format&fit=crop' }} 
                 style={styles.mainImage}
                 resizeMode="cover"
               />
               <View style={styles.innerGlow} />
               <View style={styles.imageOverlay}>
                 <Text style={styles.placeholderText}>
-                  {displayMomentUri
-                    ? formatRelativeTime(partnerMomentUpdatedAt)
-                    : 'Waiting for a moment'}
+                  {latestPartnerMoment
+                    ? formatRelativeTime(latestPartnerMoment.createdAt)
+                    : `Waiting for ${partnerName}`}
                 </Text>
               </View>
             </View>
             <View style={styles.cardFooter}>
               <Text style={styles.cardTitle}>
-                {displayMomentUri ? `From ${partnerName}` : 'Share a moment with the + button'}
+                {latestPartnerMoment
+                  ? latestPartnerMoment.caption?.trim()
+                    ? `"${latestPartnerMoment.caption.trim()}"`
+                    : `From ${latestPartnerMoment.displayName || partnerName}`
+                  : `When ${partnerName} shares, it appears here`}
               </Text>
-              {displayMomentUri && partnerMomentUpdatedAt && (
-                <Text style={styles.cardTime}>{formatMomentFooter(partnerMomentUpdatedAt)}</Text>
+              {latestPartnerMoment?.createdAt ? (
+                <Text style={styles.cardTime}>{formatMomentFooter(latestPartnerMoment.createdAt)}</Text>
+              ) : (
+                <Text style={styles.cardTime}>Tap + to send them a moment</Text>
               )}
             </View>
           </View>
         </View>
+
+        {pastPartnerMoments.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Earlier from {partnerName}</Text>
+              <Text style={styles.viewAll}>{pastPartnerMoments.length} saved</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.momentTrailScroll}
+              contentContainerStyle={styles.momentTrailContent}
+            >
+              {pastPartnerMoments.map((moment) => (
+                <View key={moment.id} style={styles.momentTrailCard}>
+                  <RNImage source={{ uri: moment.imageUrl }} style={styles.momentTrailImage} resizeMode="cover" />
+                  <View style={styles.momentTrailOverlay}>
+                    <Camera color={theme.colors.primary} size={12} />
+                    <Text style={styles.momentTrailTime}>{formatRelativeTime(moment.createdAt)}</Text>
+                  </View>
+                  <Text style={styles.momentTrailName} numberOfLines={1}>
+                    {moment.displayName || partnerName}
+                  </Text>
+                  <Text style={styles.momentTrailDate} numberOfLines={1}>
+                    {formatMomentFooter(moment.createdAt)}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
         {/* Widget previews — mirrors home-screen widgets */}
         <View style={styles.sectionHeader}>
@@ -279,9 +320,9 @@ export const HomeScreen = () => {
           <View style={styles.vaultCard}>
             <Text style={styles.vaultTitle}>Private Vault</Text>
             <Text style={styles.vaultCount}>
-              {memories.length === 0
-                ? 'No memories yet'
-                : `${memories.length} Shared ${memories.length === 1 ? 'Memory' : 'Memories'}`}
+              {vaultMemories.length === 0
+                ? 'Your private space'
+                : `${vaultMemories.length} private ${vaultMemories.length === 1 ? 'memory' : 'memories'}`}
             </Text>
           </View>
         </TouchableOpacity>
@@ -448,6 +489,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.onSurfaceVariant,
     opacity: 0.7,
+  },
+  momentTrailScroll: {
+    marginBottom: 28,
+    marginHorizontal: -theme.spacing.containerPadding,
+  },
+  momentTrailContent: {
+    paddingHorizontal: theme.spacing.containerPadding,
+    gap: 12,
+  },
+  momentTrailCard: {
+    width: 120,
+    borderRadius: theme.roundness.lg,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.glass,
+    borderWidth: 1,
+    borderColor: theme.colors.glassBorder,
+  },
+  momentTrailImage: {
+    width: '100%',
+    height: 120,
+  },
+  momentTrailOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  momentTrailTime: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+  momentTrailName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.primary,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+  },
+  momentTrailDate: {
+    fontSize: 10,
+    color: theme.colors.onSurfaceVariant,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingTop: 2,
   },
   widgetScroll: {
     marginBottom: 28,

@@ -25,20 +25,20 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export const PrivateVaultScreen = () => {
   const navigation = useNavigation<Nav>();
-  const { memories, biometricUnlockEnabled } = useAppContext();
+  const { vaultMemories, biometricUnlockEnabled } = useAppContext();
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredMemories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return memories;
-    return memories.filter(
+    if (!q) return vaultMemories;
+    return vaultMemories.filter(
       (m) =>
         m.title.toLowerCase().includes(q) ||
         (m.note?.toLowerCase().includes(q) ?? false) ||
         (m.location?.toLowerCase().includes(q) ?? false)
     );
-  }, [memories, searchQuery]);
+  }, [vaultMemories, searchQuery]);
 
   const tryUnlock = async () => {
     if (!biometricUnlockEnabled) {

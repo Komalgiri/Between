@@ -10,12 +10,15 @@ import {
   Alert,
 } from 'react-native';
 import { theme } from '../theme/theme';
-import { Settings, MapPin, BookOpen } from 'lucide-react-native';
+import { Settings, Camera, BookOpen } from 'lucide-react-native';
 import { DistanceConnection } from '../components/DistanceConnection';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { formatMomentFooter, formatRelativeTime } from '../utils/time';
+import { formatMemoryDate } from '../utils/memoryFormat';
 
 const { width } = Dimensions.get('window');
 
@@ -23,8 +26,9 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export const MemoryTimelineScreen = () => {
   const navigation = useNavigation<Nav>();
+  const { user } = useAuth();
   const {
-    memories,
+    sharedMoments,
     partnerName,
     userName,
     distanceKm,
@@ -53,7 +57,7 @@ export const MemoryTimelineScreen = () => {
             <Text style={styles.avatarText}>{userName.charAt(0).toUpperCase()}</Text>
           </View>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Between</Text>
+        <Text style={styles.headerTitle}>Moments</Text>
         <View style={styles.headerActions}>
           <DistanceConnection
             compact
@@ -70,66 +74,51 @@ export const MemoryTimelineScreen = () => {
         </View>
       </View>
 
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => navigation.navigate('CreateMemory')}
-        >
-          <Text style={styles.filterText}>+ ADD</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.verticalThread} />
 
-        {memories.length === 0 ? (
+        {sharedMoments.length === 0 ? (
           <View style={styles.emptyState}>
-            <BookOpen color={theme.colors.onSurfaceVariant} size={40} />
-            <Text style={styles.emptyTitle}>No memories yet</Text>
+            <Camera color={theme.colors.onSurfaceVariant} size={40} />
+            <Text style={styles.emptyTitle}>No shared moments yet</Text>
             <Text style={styles.emptySubtitle}>
-              Tap + ADD to share a moment with {partnerName}.
+              Use the + button on Home to share a photo with {partnerName}. Private vault memories stay hidden.
             </Text>
           </View>
         ) : (
           <View style={styles.timelineList}>
-            {memories.map((memory) => (
-              <View key={memory.id} style={styles.timelineItem}>
-                <View style={styles.glowingNode} />
-                <Text style={styles.dateLabel}>{memory.date.toUpperCase()}</Text>
+            {sharedMoments.map((moment) => {
+              const mine = user?.uid === moment.userId;
+              return (
+                <View key={moment.id} style={styles.timelineItem}>
+                  <View style={styles.glowingNode} />
+                  <Text style={styles.dateLabel}>
+                    {(moment.createdAt ? formatMemoryDate(moment.createdAt) : 'Today').toUpperCase()}
+                  </Text>
 
-                <View style={styles.glassCard}>
-                  {memory.uri ? (
-                    <RNImage source={{ uri: memory.uri }} style={styles.mainImage} />
-                  ) : (
-                    <View style={styles.noteCard}>
-                      <BookOpen color={theme.colors.secondary} size={28} />
-                      <Text style={styles.noteTitle}>{memory.title}</Text>
+                  <View style={styles.glassCard}>
+                    <RNImage source={{ uri: moment.imageUrl }} style={styles.mainImage} resizeMode="cover" />
+                    <View style={styles.timeBadge}>
+                      <Camera color={theme.colors.primary} size={12} />
+                      <Text style={styles.timeBadgeText}>{formatRelativeTime(moment.createdAt)}</Text>
                     </View>
-                  )}
 
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.cardTitle}>{memory.title}</Text>
-                    {memory.note ? (
-                      <Text style={styles.cardNote} numberOfLines={3}>
-                        {memory.note}
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.cardTitle}>
+                        {moment.caption?.trim() || (mine ? 'You shared a moment' : `${moment.displayName} shared`)}
                       </Text>
-                    ) : null}
-                    <View style={styles.footerRow}>
-                      <MapPin color={theme.colors.secondary} size={14} />
-                      <Text style={styles.footerText}>
-                        {(memory.location || 'Our sanctuary').toUpperCase()}
-                      </Text>
+                      <Text style={styles.cardNote}>{formatMomentFooter(moment.createdAt)}</Text>
+                      {moment.displayName ? (
+                        <Text style={styles.authorText}>by {mine ? 'You' : moment.displayName}</Text>
+                      ) : null}
                     </View>
-                    {memory.authorName ? (
-                      <Text style={styles.authorText}>by {memory.authorName}</Text>
-                    ) : null}
                   </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -185,38 +174,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  filterContainer: {
-    position: 'absolute',
-    top: 110,
-    right: 20,
-    zIndex: 40,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  filterText: {
-    color: theme.colors.primary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
   scrollContent: {
-    paddingTop: 60,
+    paddingTop: 24,
     paddingBottom: 150,
   },
   verticalThread: {
     position: 'absolute',
     left: width / 2,
-    top: 60,
+    top: 24,
     bottom: 0,
     width: 1,
     backgroundColor: 'rgba(236, 185, 196, 0.2)',
@@ -263,26 +228,27 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 12,
   },
-  noteCard: {
-    aspectRatio: 4 / 5,
-    borderRadius: 20,
-    backgroundColor: theme.colors.glass,
+  timeBadge: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: 12,
-    padding: 24,
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
-  noteTitle: {
+  timeBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
     color: theme.colors.primary,
-    fontSize: 18,
-    textAlign: 'center',
-    fontWeight: '500',
   },
   cardInfo: {
     paddingHorizontal: 8,
     paddingBottom: 8,
-    gap: 8,
+    gap: 6,
   },
   cardTitle: {
     fontSize: 18,
@@ -290,20 +256,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   cardNote: {
-    fontSize: 14,
+    fontSize: 13,
     color: theme.colors.onSurfaceVariant,
-    lineHeight: 20,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  footerText: {
-    fontSize: 10,
-    color: 'rgba(197, 197, 216, 0.8)',
-    letterSpacing: 1,
-    fontWeight: '700',
   },
   authorText: {
     fontSize: 11,

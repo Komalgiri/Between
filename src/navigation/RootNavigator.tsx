@@ -10,6 +10,7 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { PlayHubScreen } from '../screens/PlayHubScreen';
 import { SharedStoryScreen } from '../screens/SharedStoryScreen';
 import { AuthScreen } from '../screens/AuthScreen';
+import { ShareMomentScreen } from '../screens/ShareMomentScreen';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { useAuth } from '../context/AuthContext';
 
@@ -23,6 +24,7 @@ export type RootStackParamList = {
   StoryGenerator: undefined;
   PlayHub: undefined;
   SharedStory: undefined;
+  ShareMoment: { imageUri: string };
   Settings: undefined;
   HomeTab: undefined;
   MoodTab: undefined;
@@ -74,6 +76,14 @@ const AppStack = () => (
       options={{ animation: 'slide_from_bottom' }}
     />
     <Stack.Screen
+      name="ShareMoment"
+      component={ShareMomentScreen}
+      options={{
+        presentation: 'fullScreenModal',
+        animation: 'slide_from_bottom',
+      }}
+    />
+    <Stack.Screen
       name="Settings"
       component={SettingsScreen}
       options={{ animation: 'slide_from_right' }}
@@ -103,6 +113,11 @@ export const RootNavigator = () => {
         <Stack.Screen name="StoryGenerator" component={StoryGeneratorScreen} />
         <Stack.Screen name="PlayHub" component={PlayHubScreen} />
         <Stack.Screen name="SharedStory" component={SharedStoryScreen} />
+        <Stack.Screen
+          name="ShareMoment"
+          component={ShareMomentScreen}
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
         <Stack.Screen name="Settings" component={SettingsScreen} />
       </Stack.Navigator>
     );

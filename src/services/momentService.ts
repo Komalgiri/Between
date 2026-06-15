@@ -15,11 +15,22 @@ import { compressImageForFirestore } from '../utils/compressImage';
 const momentsCollection = (relationshipId: string) =>
   collection(getFirebaseDb(), 'relationships', relationshipId, 'moments');
 
+const docToMoment = (id: string, data: Record<string, unknown>): SharedMomentDoc => ({
+  id,
+  userId: data.userId as string,
+  displayName: (data.displayName as string) ?? 'Partner',
+  imageUrl: data.imageUrl as string,
+  storagePath: data.storagePath as string | undefined,
+  caption: data.caption as string | undefined,
+  createdAt: toDate(data.createdAt)?.toISOString(),
+});
+
 export const uploadSharedMoment = async (
   relationshipId: string,
   userId: string,
   displayName: string,
-  localUri: string
+  localUri: string,
+  caption?: string
 ): Promise<void> => {
   const imageUrl = await compressImageForFirestore(localUri);
 
@@ -27,32 +38,29 @@ export const uploadSharedMoment = async (
     userId,
     displayName,
     imageUrl,
+    caption: caption ?? '',
     createdAt: serverTimestamp(),
   });
 };
 
+export const subscribeToSharedMoments = (
+  relationshipId: string,
+  onUpdate: (moments: SharedMomentDoc[]) => void
+): (() => void) => {
+  const q = query(momentsCollection(relationshipId), orderBy('createdAt', 'desc'), limit(24));
+
+  return onSnapshot(q, (snapshot) => {
+    onUpdate(snapshot.docs.map((d) => docToMoment(d.id, d.data())));
+  });
+};
+
+/** @deprecated use subscribeToSharedMoments */
 export const subscribeToPartnerMoment = (
   relationshipId: string,
   myUserId: string,
   onUpdate: (moment: SharedMomentDoc | null) => void
-): (() => void) => {
-  const q = query(momentsCollection(relationshipId), orderBy('createdAt', 'desc'), limit(10));
-
-  return onSnapshot(q, (snapshot) => {
-    const partnerDoc = snapshot.docs.find((d) => d.data().userId !== myUserId);
-    if (!partnerDoc) {
-      onUpdate(null);
-      return;
-    }
-
-    const data = partnerDoc.data();
-    onUpdate({
-      id: partnerDoc.id,
-      userId: data.userId,
-      displayName: data.displayName ?? 'Partner',
-      imageUrl: data.imageUrl,
-      storagePath: data.storagePath,
-      createdAt: toDate(data.createdAt)?.toISOString(),
-    });
+): (() => void) =>
+  subscribeToSharedMoments(relationshipId, (moments) => {
+    const partner = moments.find((m) => m.userId !== myUserId) ?? null;
+    onUpdate(partner);
   });
-};

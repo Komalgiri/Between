@@ -9,8 +9,8 @@ import React, {
 import { useAuth } from './AuthContext';
 import { MoodId } from '../types/mood';
 import { updatePresence, subscribeToPartnerPresence, updatePresenceLocation } from '../services/presenceService';
-import { uploadSharedMoment, subscribeToPartnerMoment } from '../services/momentService';
-import { createMemory as saveMemory, subscribeToMemories } from '../services/memoryService';
+import { uploadSharedMoment, subscribeToSharedMoments } from '../services/momentService';
+import { createMemory as saveMemory, subscribeToVaultMemories } from '../services/memoryService';
 import { fetchRelationship } from '../services/relationshipService';
 import { startLocationWatch, coordsFromPresence, requestLocationPermission, getCurrentCoords } from '../services/locationService';
 import { formatMemoryDate, memoryTitleFromNote } from '../utils/memoryFormat';
@@ -18,7 +18,7 @@ import { haversineKm, formatDistance, Coordinates } from '../utils/distance';
 import { subscribeToPartnerStory } from '../services/storyService';
 import { logMoodEntry, subscribeToMoodHistory } from '../services/moodHistoryService';
 import { subscribeToLiveCanvas, mergeCanvasLayers, LiveCanvasState } from '../services/liveCanvasService';
-import { SharedStoryDoc, MoodHistoryEntry } from '../types/firebase';
+import { SharedStoryDoc, MoodHistoryEntry, SharedMomentDoc } from '../types/firebase';
 import { toDate } from '../utils/time';
 
 export type { MoodId };
@@ -61,15 +61,15 @@ type AppContextType = {
   relationshipId: string | null;
   cuteNotificationsEnabled: boolean;
   setCuteNotificationsEnabled: (enabled: boolean) => void;
-  memories: MemoryItem[];
+  vaultMemories: MemoryItem[];
   createMemory: (data: CreateMemoryInput) => Promise<void>;
+  /** @deprecated use vaultMemories */
+  memories: MemoryItem[];
   /** @deprecated use createMemory */
   vaultItems: MemoryItem[];
   addVaultItem: (item: MemoryItem) => void;
-  sharedMomentUri: string | null;
-  partnerMomentUri: string | null;
-  partnerMomentUpdatedAt: Date | null;
-  shareMoment: (localUri: string) => Promise<void>;
+  sharedMoments: SharedMomentDoc[];
+  shareMoment: (localUri: string, caption?: string) => Promise<void>;
   userMood: MoodId;
   setUserMood: (mood: MoodId) => void;
   partnerMood: MoodId;
@@ -102,9 +102,7 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
   const [anniversary, setAnniversary] = useState('');
   const [relationshipId, setRelationshipId] = useState<string | null>(null);
   const [cuteNotificationsEnabled, setCuteNotificationsEnabled] = useState(true);
-  const [sharedMomentUri, setSharedMomentUri] = useState<string | null>(null);
-  const [partnerMomentUri, setPartnerMomentUri] = useState<string | null>(null);
-  const [partnerMomentUpdatedAt, setPartnerMomentUpdatedAt] = useState<Date | null>(null);
+  const [sharedMoments, setSharedMoments] = useState<SharedMomentDoc[]>([]);
   const [userMood, setUserMood] = useState<MoodId>('connected');
   const [partnerMood, setPartnerMood] = useState<MoodId>('restful');
   const [dailyStatus, setDailyStatus] = useState('Thinking of you ☁️');
@@ -120,7 +118,7 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
   const [localStoryPreview, setLocalStoryPreview] = useState<SharedStoryPreview | null>(null);
   const [moodHistory, setMoodHistory] = useState<MoodHistoryEntry[]>([]);
   const [biometricUnlockEnabled, setBiometricUnlockEnabled] = useState(true);
-  const [memories, setMemories] = useState<MemoryItem[]>([]);
+  const [vaultMemories, setVaultMemories] = useState<MemoryItem[]>([]);
 
   useEffect(() => {
     if (!profile) return;
@@ -229,23 +227,21 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
   }, [firebaseEnabled, user, relationshipId]);
 
   useEffect(() => {
-    if (!firebaseEnabled || !user || !relationshipId) return;
+    if (!firebaseEnabled || !relationshipId) {
+      if (!firebaseEnabled) setSharedMoments([]);
+      return;
+    }
 
-    return subscribeToPartnerMoment(relationshipId, user.uid, (moment) => {
-      if (!moment) {
-        setPartnerMomentUri(null);
-        setPartnerMomentUpdatedAt(null);
-        return;
-      }
-      setPartnerMomentUri(moment.imageUrl);
-      setPartnerMomentUpdatedAt(toDate(moment.createdAt));
-    });
-  }, [firebaseEnabled, user, relationshipId]);
+    return subscribeToSharedMoments(relationshipId, setSharedMoments);
+  }, [firebaseEnabled, relationshipId]);
 
   useEffect(() => {
-    if (!firebaseEnabled || !relationshipId) return;
-    return subscribeToMemories(relationshipId, setMemories);
-  }, [firebaseEnabled, relationshipId]);
+    if (!firebaseEnabled || !relationshipId || !user) {
+      if (!firebaseEnabled) setVaultMemories([]);
+      return;
+    }
+    return subscribeToVaultMemories(relationshipId, user.uid, setVaultMemories);
+  }, [firebaseEnabled, relationshipId, user]);
 
   useEffect(() => {
     if (!firebaseEnabled || !user || !relationshipId) return;
@@ -263,12 +259,20 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
   }, [firebaseEnabled, relationshipId]);
 
   const shareMoment = useCallback(
-    async (localUri: string) => {
+    async (localUri: string, caption?: string) => {
       if (firebaseEnabled && user && relationshipId) {
-        await uploadSharedMoment(relationshipId, user.uid, userName, localUri);
+        await uploadSharedMoment(relationshipId, user.uid, userName, localUri, caption);
         return;
       }
-      setSharedMomentUri(localUri);
+      const localMoment: SharedMomentDoc = {
+        id: `local_${Date.now()}`,
+        userId: user?.uid ?? 'local',
+        displayName: userName,
+        imageUrl: localUri,
+        caption,
+        createdAt: new Date().toISOString(),
+      };
+      setSharedMoments((prev) => [localMoment, ...prev]);
     },
     [firebaseEnabled, user, relationshipId, userName]
   );
@@ -289,13 +293,13 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
         location: data.location,
         authorName: userName,
       };
-      setMemories((prev) => [item, ...prev]);
+      setVaultMemories((prev) => [item, ...prev]);
     },
     [firebaseEnabled, user, relationshipId, userName]
   );
 
   const addVaultItem = (item: MemoryItem) => {
-    setMemories((prev) => [item, ...prev]);
+    setVaultMemories((prev) => [item, ...prev]);
   };
 
   const handleSetUserMood = (mood: MoodId) => {
@@ -342,13 +346,12 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
         relationshipId,
         cuteNotificationsEnabled,
         setCuteNotificationsEnabled,
-        memories,
+        vaultMemories,
+        memories: vaultMemories,
         createMemory,
-        vaultItems: memories,
+        vaultItems: vaultMemories,
         addVaultItem,
-        sharedMomentUri,
-        partnerMomentUri,
-        partnerMomentUpdatedAt,
+        sharedMoments,
         shareMoment,
         userMood,
         setUserMood: handleSetUserMood,

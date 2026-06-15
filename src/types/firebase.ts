@@ -32,7 +32,8 @@ export type SharedMomentDoc = {
   userId: string;
   displayName: string;
   imageUrl: string;
-  storagePath: string;
+  storagePath?: string;
+  caption?: string;
   createdAt?: string;
 };
 

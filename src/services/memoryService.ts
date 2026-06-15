@@ -5,6 +5,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  where,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '../lib/firebase';
 import { MemoryItem } from '../context/AppContext';
@@ -61,10 +62,32 @@ export const createMemory = async (
     location: data.location ?? '',
     mood: data.mood ?? '',
     imageUrl: imageUrl ?? null,
+    isPrivate: true,
     createdAt: serverTimestamp(),
   });
 };
 
+export const subscribeToVaultMemories = (
+  relationshipId: string,
+  userId: string,
+  onUpdate: (memories: MemoryItem[]) => void
+): (() => void) => {
+  const q = query(memoriesCollection(relationshipId), where('userId', '==', userId));
+
+  return onSnapshot(q, (snapshot) => {
+    const items = snapshot.docs
+      .map((d) => ({ id: d.id, data: d.data() }))
+      .sort((a, b) => {
+        const aTime = toDate(a.data.createdAt)?.getTime() ?? 0;
+        const bTime = toDate(b.data.createdAt)?.getTime() ?? 0;
+        return bTime - aTime;
+      })
+      .map(({ id, data }) => docToMemoryItem(id, data));
+    onUpdate(items);
+  });
+};
+
+/** @deprecated use subscribeToVaultMemories */
 export const subscribeToMemories = (
   relationshipId: string,
   onUpdate: (memories: MemoryItem[]) => void

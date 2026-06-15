@@ -58,9 +58,11 @@ service cloud.firestore {
       }
 
       match /memories/{memoryId} {
-        allow read: if isMember(relationshipId);
+        allow read: if isMember(relationshipId)
+          && resource.data.userId == request.auth.uid;
         allow create: if isMember(relationshipId)
-          && request.resource.data.userId == request.auth.uid;
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.isPrivate == true;
       }
 
       match /play/{sessionId} {
