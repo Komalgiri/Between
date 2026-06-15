@@ -37,8 +37,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(firebaseEnabled);
 
   const loadProfile = async (uid: string) => {
-    const p = await fetchUserProfile(uid);
-    setProfile(p);
+    try {
+      const p = await fetchUserProfile(uid);
+      setProfile(p);
+    } catch {
+      setProfile(null);
+    }
   };
 
   useEffect(() => {

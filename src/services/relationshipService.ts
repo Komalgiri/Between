@@ -49,6 +49,8 @@ export const createRelationship = async (
     memberIds: [userId],
     createdBy: userId,
     createdAt: new Date().toISOString(),
+    creatorDisplayName: options.displayName,
+    memberDisplayNames: { [userId]: options.displayName },
   };
 
   await setDoc(relationshipRef, relationship);
@@ -95,21 +97,17 @@ export const joinRelationship = async (
   if (!data.memberIds.includes(userId)) {
     await updateDoc(relationshipRef, {
       memberIds: arrayUnion(userId),
+      [`memberDisplayNames.${userId}`]: displayName,
     });
   }
 
-  const creatorId = data.createdBy;
-  const creatorSnap = await getDoc(doc(db, 'users', creatorId));
-  const creatorName = creatorSnap.data()?.displayName ?? 'Partner';
+  const creatorName =
+    data.creatorDisplayName ?? data.memberDisplayNames?.[data.createdBy] ?? 'Partner';
 
   await updateUserProfile(userId, {
     displayName,
     relationshipId,
     partnerDisplayName: creatorName,
-  });
-
-  await updateUserProfile(creatorId, {
-    partnerDisplayName: displayName,
   });
 
   return { relationshipId, partnerDisplayName: creatorName };

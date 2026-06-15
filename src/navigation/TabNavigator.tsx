@@ -8,9 +8,9 @@ import { MoodSyncScreen } from '../screens/MoodSyncScreen';
 import { MemoryTimelineScreen } from '../screens/MemoryTimelineScreen';
 import { AILetterScreen } from '../screens/AILetterScreen';
 import { theme } from '../theme/theme';
-import * as ImagePicker from 'expo-image-picker';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { pickMomentImage } from '../utils/shareMomentPicker';
 
 const Tab = createBottomTabNavigator();
 
@@ -20,30 +20,26 @@ export const TabNavigator = () => {
   const { shareMoment } = useAppContext();
   const { firebaseEnabled } = useAuth();
 
-  const openCamera = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert('Permission Denied', 'Camera access is needed to share moments!');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 4],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      try {
-        await shareMoment(result.assets[0].uri);
-        Alert.alert(
-          'Moment shared',
-          firebaseEnabled
-            ? 'Your partner will see it on Home.'
-            : 'Saved locally for this session.'
-        );
-      } catch {
-        Alert.alert('Could not share', 'Check your connection and Firebase Storage setup.');
-      }
+  const shareMomentPhoto = async () => {
+    const uri = await pickMomentImage();
+    if (!uri) return;
+
+    try {
+      await shareMoment(uri);
+      Alert.alert(
+        'Moment shared',
+        firebaseEnabled
+          ? 'Your partner will see it on Home.'
+          : 'Saved locally for this session.'
+      );
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Upload failed';
+      Alert.alert(
+        'Could not share',
+        firebaseEnabled
+          ? `${message}\n\nTry a smaller photo or check your connection.`
+          : message
+      );
     }
   };
 
@@ -90,7 +86,7 @@ export const TabNavigator = () => {
         listeners={({ navigation }) => ({
           tabPress: (e) => {
             e.preventDefault();
-            openCamera();
+            shareMomentPhoto();
           },
         })}
       />

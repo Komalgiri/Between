@@ -13,6 +13,8 @@ export type Relationship = {
   memberIds: string[];
   createdBy: string;
   createdAt: string;
+  creatorDisplayName?: string;
+  memberDisplayNames?: Record<string, string>;
 };
 
 export type PresenceDoc = {

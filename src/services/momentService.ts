@@ -7,10 +7,10 @@ import {
   query,
   serverTimestamp,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { getFirebaseDb, getFirebaseStorage } from '../lib/firebase';
+import { getFirebaseDb } from '../lib/firebase';
 import { SharedMomentDoc } from '../types/firebase';
 import { toDate } from '../utils/time';
+import { compressImageForFirestore } from '../utils/compressImage';
 
 const momentsCollection = (relationshipId: string) =>
   collection(getFirebaseDb(), 'relationships', relationshipId, 'moments');
@@ -21,20 +21,12 @@ export const uploadSharedMoment = async (
   displayName: string,
   localUri: string
 ): Promise<void> => {
-  const response = await fetch(localUri);
-  const blob = await response.blob();
-  const momentId = `${userId}_${Date.now()}`;
-  const storagePath = `relationships/${relationshipId}/moments/${momentId}.jpg`;
-  const storageRef = ref(getFirebaseStorage(), storagePath);
-
-  await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-  const imageUrl = await getDownloadURL(storageRef);
+  const imageUrl = await compressImageForFirestore(localUri);
 
   await addDoc(momentsCollection(relationshipId), {
     userId,
     displayName,
     imageUrl,
-    storagePath,
     createdAt: serverTimestamp(),
   });
 };

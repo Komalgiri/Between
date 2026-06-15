@@ -24,6 +24,13 @@
         {
           "faceIDPermission": "BETWEEN uses Face ID to unlock your Private Vault."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "BETWEEN needs photo access so you can share moments with your partner.",
+          "cameraPermission": "BETWEEN needs camera access so you can capture and share moments."
+        }
       ]
     ],
     "android": {

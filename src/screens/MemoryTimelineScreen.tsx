@@ -7,9 +7,11 @@ import {
   Dimensions,
   TouchableOpacity,
   Image as RNImage,
+  Alert,
 } from 'react-native';
 import { theme } from '../theme/theme';
-import { Settings, SlidersHorizontal, MapPin, BookOpen } from 'lucide-react-native';
+import { Settings, MapPin, BookOpen } from 'lucide-react-native';
+import { DistanceConnection } from '../components/DistanceConnection';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/RootNavigator';
@@ -21,7 +23,25 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export const MemoryTimelineScreen = () => {
   const navigation = useNavigation<Nav>();
-  const { memories, partnerName, userName } = useAppContext();
+  const {
+    memories,
+    partnerName,
+    userName,
+    distanceKm,
+    distanceLabel,
+    distanceLive,
+    refreshLocation,
+  } = useAppContext();
+
+  const handleFixDistance = async () => {
+    const ok = await refreshLocation();
+    Alert.alert(
+      ok ? 'Distance updated' : 'Could not update',
+      ok
+        ? 'Your location was refreshed. Distance shows once your partner shares theirs too.'
+        : 'Allow location access for BETWEEN in your phone settings, then try again.'
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -34,9 +54,20 @@ export const MemoryTimelineScreen = () => {
           </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Between</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-          <Settings color={theme.colors.primary} size={24} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <DistanceConnection
+            compact
+            userName={userName}
+            partnerName={partnerName}
+            distanceKm={distanceKm}
+            distanceLabel={distanceLabel}
+            distanceLive={distanceLive}
+            onPress={handleFixDistance}
+          />
+          <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+            <Settings color={theme.colors.primary} size={24} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.filterContainer}>
@@ -148,6 +179,11 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '600',
     letterSpacing: -1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   filterContainer: {
     position: 'absolute',

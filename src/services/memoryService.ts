@@ -6,11 +6,11 @@ import {
   query,
   serverTimestamp,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { getFirebaseDb, getFirebaseStorage } from '../lib/firebase';
+import { getFirebaseDb } from '../lib/firebase';
 import { MemoryItem } from '../context/AppContext';
 import { formatMemoryDate, memoryTitleFromNote } from '../utils/memoryFormat';
 import { toDate } from '../utils/time';
+import { compressImageForFirestore } from '../utils/compressImage';
 
 const memoriesCollection = (relationshipId: string) =>
   collection(getFirebaseDb(), 'relationships', relationshipId, 'memories');
@@ -47,13 +47,7 @@ export const createMemory = async (
   let imageUrl: string | undefined;
 
   if (data.localImageUri) {
-    const response = await fetch(data.localImageUri);
-    const blob = await response.blob();
-    const memoryId = `${userId}_${Date.now()}`;
-    const storagePath = `relationships/${relationshipId}/memories/${memoryId}.jpg`;
-    const storageRef = ref(getFirebaseStorage(), storagePath);
-    await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-    imageUrl = await getDownloadURL(storageRef);
+    imageUrl = await compressImageForFirestore(data.localImageUri);
   }
 
   const type = data.type ?? (imageUrl ? 'image' : 'note');

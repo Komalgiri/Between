@@ -9,14 +9,16 @@ import {
   Image as RNImage,
   Animated,
   Easing,
+  Alert,
 } from 'react-native';
 import { theme } from '../theme/theme';
-import { Sparkles, Hourglass, Mail, BookOpen, Gamepad2, MapPin, PenLine, Heart } from 'lucide-react-native';
+import { Sparkles, Hourglass, Mail, BookOpen, Gamepad2, PenLine, Heart } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { DistanceConnection } from '../components/DistanceConnection';
 import { MOOD_LABELS } from '../types/mood';
 import { formatMomentFooter, formatRelativeTime } from '../utils/time';
 
@@ -35,10 +37,10 @@ export const HomeScreen = () => {
     partnerDailyStatus,
     userMood,
     dailyStatus,
+    distanceKm,
     distanceLabel,
     distanceLive,
-    locationSharingEnabled,
-    partnerLocationUpdatedAt,
+    refreshLocation,
     sharedStoryPreview,
     memories,
   } = useAppContext();
@@ -84,6 +86,17 @@ export const HomeScreen = () => {
       useNativeDriver: true,
     }).start();
   };
+
+  const handleRefreshDistance = async () => {
+    const ok = await refreshLocation();
+    if (!ok) {
+      Alert.alert(
+        'Location needed',
+        'Turn on location for BETWEEN and allow access so we can show distance between you.'
+      );
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Cinematic Header */}
@@ -127,6 +140,15 @@ export const HomeScreen = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        <DistanceConnection
+          userName={userName}
+          partnerName={partnerName}
+          distanceKm={distanceKm}
+          distanceLabel={distanceLabel}
+          distanceLive={distanceLive}
+          onPress={handleRefreshDistance}
+        />
+
         {/* Main Memory Focus - Glass Card */}
         <View style={styles.mainCard}>
           <View style={styles.cardGlow} />
@@ -186,18 +208,6 @@ export const HomeScreen = () => {
               </Text>
             </View>
           ) : null}
-          <View style={[styles.widgetCard, distanceLive && styles.widgetCardLive]}>
-            <MapPin color={distanceLive ? '#4ADE80' : theme.colors.onSurfaceVariant} size={20} />
-            <Text style={styles.widgetLabel}>Distance</Text>
-            <Text style={styles.widgetValue}>{distanceLabel}</Text>
-            <Text style={styles.widgetHint}>
-              {distanceLive
-                ? `Live · ${formatRelativeTime(partnerLocationUpdatedAt)}`
-                : locationSharingEnabled
-                  ? `Waiting for ${partnerName}'s location`
-                  : 'Enable location to track'}
-            </Text>
-          </View>
           {sharedStoryPreview && (
             <TouchableOpacity
               style={styles.widgetCard}
@@ -455,10 +465,6 @@ const styles = StyleSheet.create({
     marginRight: 12,
     justifyContent: 'space-between',
   },
-  widgetCardLive: {
-    borderColor: 'rgba(74, 222, 128, 0.35)',
-    backgroundColor: 'rgba(74, 222, 128, 0.06)',
-  },
   widgetLabel: {
     fontSize: 10,
     fontWeight: '700',
@@ -477,11 +483,6 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '500',
     lineHeight: 18,
-  },
-  widgetHint: {
-    fontSize: 10,
-    color: theme.colors.onSurfaceVariant,
-    marginTop: 2,
   },
   actionsGrid: {
     flexDirection: 'row',

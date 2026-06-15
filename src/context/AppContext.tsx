@@ -12,7 +12,7 @@ import { updatePresence, subscribeToPartnerPresence, updatePresenceLocation } fr
 import { uploadSharedMoment, subscribeToPartnerMoment } from '../services/momentService';
 import { createMemory as saveMemory, subscribeToMemories } from '../services/memoryService';
 import { fetchRelationship } from '../services/relationshipService';
-import { startLocationWatch, coordsFromPresence } from '../services/locationService';
+import { startLocationWatch, coordsFromPresence, requestLocationPermission, getCurrentCoords } from '../services/locationService';
 import { formatMemoryDate, memoryTitleFromNote } from '../utils/memoryFormat';
 import { haversineKm, formatDistance, Coordinates } from '../utils/distance';
 import { subscribeToPartnerStory } from '../services/storyService';
@@ -82,6 +82,7 @@ type AppContextType = {
   distanceLive: boolean;
   locationSharingEnabled: boolean;
   partnerLocationUpdatedAt: Date | null;
+  refreshLocation: () => Promise<boolean>;
   partnerStory: SharedStoryDoc | null;
   sharedStoryPreview: SharedStoryPreview | null;
   moodHistory: MoodHistoryEntry[];
@@ -171,6 +172,25 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
     }
     setDistanceKm(haversineKm(userCoords, partnerCoords));
   }, [userCoords, partnerCoords]);
+
+  const refreshLocation = useCallback(async (): Promise<boolean> => {
+    if (!firebaseEnabled || !user || !relationshipId) return false;
+
+    const granted = await requestLocationPermission();
+    if (!granted) return false;
+
+    const coords = await getCurrentCoords();
+    if (!coords) return false;
+
+    setUserCoords(coords);
+    setLocationSharingEnabled(true);
+    try {
+      await updatePresenceLocation(relationshipId, user.uid, coords);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [firebaseEnabled, user, relationshipId]);
 
   useEffect(() => {
     if (!firebaseEnabled || !user || !relationshipId) {
@@ -342,6 +362,7 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
         distanceLive,
         locationSharingEnabled,
         partnerLocationUpdatedAt,
+        refreshLocation,
         partnerStory,
         sharedStoryPreview,
         moodHistory,
