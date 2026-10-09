@@ -10,25 +10,43 @@ In a world where conversations get lost in notifications and days pass without m
 
 The goal is to create a simple, thoughtful, and user-friendly experience that puts meaningful connections at the center.
 
-## 📱 Screenshots
+## 📱 Application Previews
 
-<table align="center">
-  <tr>
-    <td><img src="./src/readme_assets/app1.jpg" alt="Home Screen" width="250"/></td>
-    <td><img src="./src/readme_assets/app2.jpg" alt="Vault Screen" width="250"/></td>
-    <td><img src="./src/readme_assets/app3.jpg" alt="Chat Screen" width="250"/></td>
-  </tr>
-  <tr>
-    <td><img src="./src/readme_assets/app4.png" alt="Map Feature" width="250"/></td>
-    <td><img src="./src/readme_assets/app5.jpg" alt="Profile Screen" width="250"/></td>
-    <td><img src="./src/readme_assets/app6.jpg" alt="Shared Moments" width="250"/></td>
-  </tr>
-  <tr>
-    <td><img src="./src/readme_assets/app7.jpg" alt="Calendar Screen" width="250"/></td>
-    <td><img src="./src/readme_assets/app8.jpg" alt="Settings Screen" width="250"/></td>
-    <td></td>
-  </tr>
-</table>
+### 🏡 Stay Connected Everyday
+The home and chat spaces provide an intimate, uncluttered way to reach out and share your day.
+
+<p align="center">
+  <img src="./src/readme_assets/app1.jpg" alt="Home Screen" width="30%"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="./src/readme_assets/app3.jpg" alt="Chat Screen" width="30%"/>
+</p>
+
+### 🔒 Private Vault & Shared Moments
+Keep your most treasured memories secure and share meaningful updates in a dedicated space.
+
+<p align="center">
+  <img src="./src/readme_assets/app2.jpg" alt="Vault Screen" width="30%"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="./src/readme_assets/app6.jpg" alt="Shared Moments" width="30%"/>
+</p>
+
+### 📍 Distance & Planning
+See where you both are and keep track of important upcoming dates and milestones.
+
+<p align="center">
+  <img src="./src/readme_assets/app4.png" alt="Map Feature" width="30%"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="./src/readme_assets/app7.jpg" alt="Calendar Screen" width="30%"/>
+</p>
+
+### ⚙️ Personalization
+Customize your profile and manage settings easily to ensure the app works best for your relationship.
+
+<p align="center">
+  <img src="./src/readme_assets/app5.jpg" alt="Profile Screen" width="30%"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="./src/readme_assets/app8.jpg" alt="Settings Screen" width="30%"/>
+</p>
 
 ## ✨ About the Project
 Between explores how technology can help people maintain stronger personal connections. Rather than focusing on endless feeds or public engagement, the concept centers on the smaller interactions that make relationships meaningful.
