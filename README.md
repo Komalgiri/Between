@@ -1,97 +1,64 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+<div align="center">
+  <img src="./src/readme_assets/logo_between.png" alt="BETWEEN Logo" width="200"/>
+  <h1>BETWEEN - The Ultimate App for Couples</h1>
+  <p>A private, secure, and intimate space for you and your partner.</p>
+</div>
 
-# Getting Started
+## 📱 Screenshots
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+<table align="center">
+  <tr>
+    <td><img src="./src/readme_assets/app1.jpg" alt="Home Screen" width="250"/></td>
+    <td><img src="./src/readme_assets/app2.jpg" alt="Vault Screen" width="250"/></td>
+    <td><img src="./src/readme_assets/app3.jpg" alt="Chat Screen" width="250"/></td>
+  </tr>
+  <tr>
+    <td><img src="./src/readme_assets/app4.png" alt="Map Feature" width="250"/></td>
+    <td><img src="./src/readme_assets/app5.jpg" alt="Profile Screen" width="250"/></td>
+    <td><img src="./src/readme_assets/app6.jpg" alt="Shared Moments" width="250"/></td>
+  </tr>
+  <tr>
+    <td><img src="./src/readme_assets/app7.jpg" alt="Calendar Screen" width="250"/></td>
+    <td><img src="./src/readme_assets/app8.jpg" alt="Settings Screen" width="250"/></td>
+    <td></td>
+  </tr>
+</table>
 
-## Step 1: Start Metro
+## ✨ Features
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+- **Live Distance Tracking**: Shows the real-time distance between you and your partner.
+- **Private Vault**: Secure your most intimate memories behind Face ID / Biometric Authentication.
+- **Shared Moments**: Capture and instantly share photos and special moments.
+- **Secure & Private**: Built with privacy in mind.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## 🚀 Getting Started
 
-```sh
-# Using npm
-npm start
+### Prerequisites
+- Node.js
+- Expo CLI
+- iOS Simulator or Android Emulator
 
-# OR using Yarn
-yarn start
-```
+### Installation
 
-## Step 2: Build and run your app
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the application:
+   ```bash
+   npx expo start
+   ```
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+## 🛠 Tech Stack
+- React Native
+- Expo
+- TypeScript
 
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
-```
-
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+## 🔒 Privacy & Permissions
+- **Location**: Used to calculate the live distance between partners.
+- **Face ID / Biometrics**: Protects your Private Vault.
+- **Camera & Photos**: Allows you to take and share photos securely.
